@@ -102,6 +102,70 @@ namespace lceda_step_downloader.ViewModels
             }
         }
 
+        private string _schematicSvgPath;
+        public string SchematicSvgPath
+        {
+            get => _schematicSvgPath;
+            set
+            {
+                SetAndNotify(ref _schematicSvgPath, value);
+                SchematicSvgUri = value != null ? new Uri(value) : null;
+            }
+        }
+
+        private Uri _schematicSvgUri;
+        public Uri SchematicSvgUri
+        {
+            get => _schematicSvgUri;
+            set => SetAndNotify(ref _schematicSvgUri, value);
+        }
+
+        private string _footprintSvgPath;
+        public string FootprintSvgPath
+        {
+            get => _footprintSvgPath;
+            set
+            {
+                SetAndNotify(ref _footprintSvgPath, value);
+                FootprintSvgUri = value != null ? new Uri(value) : null;
+            }
+        }
+
+        private Uri _footprintSvgUri;
+        public Uri FootprintSvgUri
+        {
+            get => _footprintSvgUri;
+            set => SetAndNotify(ref _footprintSvgUri, value);
+        }
+
+        private bool _hasSchematic;
+        public bool HasSchematic
+        {
+            get => _hasSchematic;
+            set => SetAndNotify(ref _hasSchematic, value);
+        }
+
+        private bool _hasFootprint;
+        public bool HasFootprint
+        {
+            get => _hasFootprint;
+            set => SetAndNotify(ref _hasFootprint, value);
+        }
+
+        private bool _hasDatasheet;
+        public bool HasDatasheet
+        {
+            get => _hasDatasheet;
+            set => SetAndNotify(ref _hasDatasheet, value);
+        }
+
+        private string _datasheetUrl;
+        public string DatasheetUrl
+        {
+            get => _datasheetUrl;
+            set => SetAndNotify(ref _datasheetUrl, value);
+        }
+
         public RootViewModel()
         {
             Selecteditem = null;
@@ -120,6 +184,18 @@ namespace lceda_step_downloader.ViewModels
             if (!Directory.Exists(@".\step"))
             {
                 Directory.CreateDirectory(@".\step");
+            }
+            if (!Directory.Exists(@".\symbols"))
+            {
+                Directory.CreateDirectory(@".\symbols");
+            }
+            if (!Directory.Exists(@".\footprints"))
+            {
+                Directory.CreateDirectory(@".\footprints");
+            }
+            if (!Directory.Exists(@".\datasheets"))
+            {
+                Directory.CreateDirectory(@".\datasheets");
             }
         }
 
@@ -158,9 +234,27 @@ namespace lceda_step_downloader.ViewModels
             if (Selecteditem.images.Count == 0)
             {
                 ImageSource = "https:" + Selecteditem.creator.avatar;
-                return;
             }
-            ImageSource = Selecteditem.images[0];
+            else
+            {
+                ImageSource = Selecteditem.images[0];
+            }
+
+            //原理图可用性检测
+            HasSchematic = Selecteditem.symbol != null && !string.IsNullOrEmpty(Selecteditem.symbol.uuid);
+            SchematicSvgPath = null;
+
+            //封装可用性检测
+            HasFootprint = Selecteditem.footprint != null && !string.IsNullOrEmpty(Selecteditem.footprint.uuid);
+            FootprintSvgPath = null;
+
+            //规格书可用性检测
+            HasDatasheet = !string.IsNullOrEmpty(Selecteditem.attributes?.Datasheet);
+            DatasheetUrl = Selecteditem.attributes?.Datasheet;
+
+            //加载原理图和封装预览
+            LoadSchematicPreview();
+            LoadFootprintPreview();
         }
 
         public void DownloadObj()
@@ -207,35 +301,7 @@ namespace lceda_step_downloader.ViewModels
             if (File.Exists(@".\step\" + Selecteditem.footprint.display_title.ToString().Replace("/", "") + @".step"))
             {
                 Debug.WriteLine("存在step缓存");
-                var stepDir = Path.Combine(AppContext.BaseDirectory, "step");
-                Growl.Ask(new HandyControl.Data.GrowlInfo
-                {
-                    Message = "STEP文件已存在",
-                    ConfirmStr = "打开文件夹",
-                    CancelStr = "关闭",
-                    IsCustom = true,
-                    IconKey = "SuccessGeometry",
-                    IconBrushKey = "SuccessBrush",
-                    ActionBeforeClose = isConfirmed =>
-                    {
-                        if (isConfirmed)
-                        {
-                            try
-                            {
-                                Process.Start(new ProcessStartInfo
-                                {
-                                    FileName = stepDir,
-                                    UseShellExecute = true
-                                });
-                            }
-                            catch (Exception ex)
-                            {
-                                Growl.Error("无法打开文件夹: " + ex.Message);
-                            }
-                        }
-                        return true;
-                    }
-                });
+                ShowFileExistsNotification(Path.Combine(AppContext.BaseDirectory, "step"), "STEP文件已存在");
                 return;
             }
             DownloadAllowed = false;
@@ -244,19 +310,12 @@ namespace lceda_step_downloader.ViewModels
 
         public void OpenStepFolder()
         {
-            var stepDir = Path.Combine(AppContext.BaseDirectory, "step");
-            try
-            {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = stepDir,
-                    UseShellExecute = true
-                });
-            }
-            catch (Exception ex)
-            {
-                Growl.Error("无法打开文件夹: " + ex.Message);
-            }
+            OpenDirectory(Path.Combine(AppContext.BaseDirectory, "step"));
+        }
+
+        public void OpenSymbolsFolder()
+        {
+            OpenDirectory(AppContext.BaseDirectory);
         }
 
         //构造PCB数据, 以利用lceda专业版的PCB导出STEP接口
@@ -352,41 +411,8 @@ namespace lceda_step_downloader.ViewModels
             //stepWriter.Dispose();
             DownloadAllowed = true;
 
-            // 构造保存目录的完整路径
-            var stepDir = Path.Combine(AppContext.BaseDirectory, "step");
-
-            // 在UI线程上显示带"打开文件夹"按钮的询问通知
             Application.Current.Dispatcher.Invoke(() =>
-            {
-                Growl.Ask(new HandyControl.Data.GrowlInfo
-                {
-                    Message = "下载成功！是否打开文件夹？",
-                    ConfirmStr = "打开文件夹",
-                    CancelStr = "关闭",
-                    IsCustom = true,
-                    IconKey = "SuccessGeometry",
-                    IconBrushKey = "SuccessBrush",
-                    ActionBeforeClose = isConfirmed =>
-                    {
-                        if (isConfirmed)
-                        {
-                            try
-                            {
-                                Process.Start(new ProcessStartInfo
-                                {
-                                    FileName = stepDir,
-                                    UseShellExecute = true
-                                });
-                            }
-                            catch (Exception ex)
-                            {
-                                Growl.Error("无法打开文件夹: " + ex.Message);
-                            }
-                        }
-                        return true; // 关闭通知
-                    }
-                });
-            });
+                ShowDownloadSuccessNotification(Path.Combine(AppContext.BaseDirectory, "step")));
         }
 
         public static HttpContent CompressRequestContent(string content)
@@ -460,6 +486,300 @@ namespace lceda_step_downloader.ViewModels
                 ObjReader CurrentHelixObjReader = new();
                 MyModelGroup = CurrentHelixObjReader.Read(Path.Combine(AppContext.BaseDirectory, "temp", tempTitle + ".obj"));
             });
+        }
+
+        public void LoadSchematicPreview()
+        {
+            if (!HasSchematic) return;
+            Task.Run(() => FetchSchematicAsync());
+        }
+
+        private async Task FetchSchematicAsync()
+        {
+            try
+            {
+                var uuid = Selecteditem.symbol.uuid;
+                var streamTask = client.GetStreamAsync(
+                    $"https://pro.lceda.cn/api/components/{uuid}?uuid={uuid}");
+                var component = await JsonSerializer.DeserializeAsync<Component>(await streamTask);
+
+                if (component?.result?.dataStr != null)
+                {
+                    var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"schematic_{uuid}.svg");
+                    await File.WriteAllTextAsync(tempPath, component.result.dataStr, Encoding.UTF8);
+                    Application.Current.Dispatcher.Invoke(() => SchematicSvgPath = tempPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"获取原理图失败: {ex.Message}");
+            }
+        }
+
+        public void LoadFootprintPreview()
+        {
+            if (!HasFootprint) return;
+            Task.Run(() => FetchFootprintAsync());
+        }
+
+        private async Task FetchFootprintAsync()
+        {
+            try
+            {
+                var uuid = Selecteditem.footprint.uuid;
+                var svgUrl = $"https://image.lceda.cn/package/{uuid}.svg";
+                var response = await client.GetAsync(svgUrl);
+                if (response.IsSuccessStatusCode)
+                {
+                    var svgContent = await response.Content.ReadAsStringAsync();
+                    var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"footprint_{uuid}.svg");
+                    await File.WriteAllTextAsync(tempPath, svgContent, Encoding.UTF8);
+                    Application.Current.Dispatcher.Invoke(() => FootprintSvgPath = tempPath);
+                    return;
+                }
+
+                var streamTask = client.GetStreamAsync(
+                    $"https://pro.lceda.cn/api/components/{uuid}?uuid={uuid}");
+                var component = await JsonSerializer.DeserializeAsync<Component>(await streamTask);
+                if (component?.result?.dataStr != null)
+                {
+                    var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"footprint_{uuid}.svg");
+                    await File.WriteAllTextAsync(tempPath, component.result.dataStr, Encoding.UTF8);
+                    Application.Current.Dispatcher.Invoke(() => FootprintSvgPath = tempPath);
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"获取封装失败: {ex.Message}");
+            }
+        }
+
+        public void DownloadSchematic()
+        {
+            if (Selecteditem == null || !HasSchematic) return;
+
+            var fileName = string.Join("_",
+                Selecteditem.symbol.display_title.ToString().Split(Path.GetInvalidFileNameChars()));
+            var filePath = Path.Combine(AppContext.BaseDirectory, "symbols", fileName + ".svg");
+
+            if (File.Exists(filePath))
+            {
+                ShowFileExistsNotification(Path.GetDirectoryName(filePath), "原理图文件已存在");
+                return;
+            }
+
+            Task.Run(() => DownloadSchematicAsync(filePath));
+        }
+
+        private async Task DownloadSchematicAsync(string filePath)
+        {
+            try
+            {
+                string svgContent = null;
+                if (!string.IsNullOrEmpty(SchematicSvgPath) && File.Exists(SchematicSvgPath))
+                {
+                    svgContent = await File.ReadAllTextAsync(SchematicSvgPath, Encoding.UTF8);
+                }
+                else
+                {
+                    var uuid = Selecteditem.symbol.uuid;
+                    var streamTask = client.GetStreamAsync(
+                        $"https://pro.lceda.cn/api/components/{uuid}?uuid={uuid}");
+                    var component = await JsonSerializer.DeserializeAsync<Component>(await streamTask);
+                    svgContent = component?.result?.dataStr;
+                }
+
+                if (string.IsNullOrEmpty(svgContent))
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                        Growl.Error("无法获取原理图数据"));
+                    return;
+                }
+
+                await File.WriteAllTextAsync(filePath, svgContent, Encoding.UTF8);
+
+                Application.Current.Dispatcher.Invoke(() =>
+                    ShowDownloadSuccessNotification(Path.GetDirectoryName(filePath)));
+            }
+            catch (Exception ex)
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                    Growl.Error($"原理图下载失败: {ex.Message}"));
+            }
+        }
+
+        public void DownloadFootprint()
+        {
+            if (Selecteditem == null || !HasFootprint) return;
+
+            var fileName = string.Join("_",
+                Selecteditem.footprint.display_title.ToString().Split(Path.GetInvalidFileNameChars()));
+            var filePath = Path.Combine(AppContext.BaseDirectory, "footprints", fileName + ".svg");
+
+            if (File.Exists(filePath))
+            {
+                ShowFileExistsNotification(Path.GetDirectoryName(filePath), "封装文件已存在");
+                return;
+            }
+
+            Task.Run(() => DownloadFootprintAsync(filePath));
+        }
+
+        private async Task DownloadFootprintAsync(string filePath)
+        {
+            try
+            {
+                string svgContent = null;
+                var svgUrl = $"https://image.lceda.cn/package/{Selecteditem.footprint.uuid}.svg";
+                var response = await client.GetAsync(svgUrl);
+                if (response.IsSuccessStatusCode)
+                {
+                    svgContent = await response.Content.ReadAsStringAsync();
+                }
+                else if (!string.IsNullOrEmpty(FootprintSvgPath) && File.Exists(FootprintSvgPath))
+                {
+                    svgContent = await File.ReadAllTextAsync(FootprintSvgPath, Encoding.UTF8);
+                }
+
+                if (string.IsNullOrEmpty(svgContent))
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                        Growl.Error("无法获取封装数据"));
+                    return;
+                }
+
+                await File.WriteAllTextAsync(filePath, svgContent, Encoding.UTF8);
+
+                Application.Current.Dispatcher.Invoke(() =>
+                    ShowDownloadSuccessNotification(Path.GetDirectoryName(filePath)));
+            }
+            catch (Exception ex)
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                    Growl.Error($"封装下载失败: {ex.Message}"));
+            }
+        }
+
+        public void OpenDatasheet()
+        {
+            if (!HasDatasheet || string.IsNullOrEmpty(DatasheetUrl)) return;
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = DatasheetUrl,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                Growl.Error($"无法打开规格书: {ex.Message}");
+            }
+        }
+
+        public void DownloadDatasheet()
+        {
+            if (!HasDatasheet || string.IsNullOrEmpty(DatasheetUrl)) return;
+
+            var url = DatasheetUrl;
+            var fileName = string.Join("_",
+                Selecteditem.display_title.ToString().Split(Path.GetInvalidFileNameChars())) + ".pdf";
+            var filePath = Path.Combine(AppContext.BaseDirectory, "datasheets", fileName);
+
+            if (File.Exists(filePath))
+            {
+                ShowFileExistsNotification(Path.GetDirectoryName(filePath), "规格书文件已存在");
+                return;
+            }
+
+            Task.Run(() => DownloadDatasheetAsync(url, filePath));
+        }
+
+        private async Task DownloadDatasheetAsync(string url, string filePath)
+        {
+            try
+            {
+                var response = await client.GetAsync(url);
+                if (!response.IsSuccessStatusCode)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                        Growl.Error("无法下载规格书"));
+                    return;
+                }
+
+                await using var stream = await response.Content.ReadAsStreamAsync();
+                await using var fileStream = File.Open(filePath, FileMode.Create);
+                await stream.CopyToAsync(fileStream);
+
+                Application.Current.Dispatcher.Invoke(() =>
+                    ShowDownloadSuccessNotification(Path.GetDirectoryName(filePath)));
+            }
+            catch (Exception ex)
+            {
+                Application.Current.Dispatcher.Invoke(() =>
+                    Growl.Error($"规格书下载失败: {ex.Message}"));
+            }
+        }
+
+        private void ShowFileExistsNotification(string directoryPath, string message)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                Growl.Ask(new HandyControl.Data.GrowlInfo
+                {
+                    Message = message,
+                    ConfirmStr = "打开文件夹",
+                    CancelStr = "关闭",
+                    IsCustom = true,
+                    IconKey = "SuccessGeometry",
+                    IconBrushKey = "SuccessBrush",
+                    ActionBeforeClose = isConfirmed =>
+                    {
+                        if (isConfirmed)
+                            OpenDirectory(directoryPath);
+                        return true;
+                    }
+                });
+            });
+        }
+
+        private void ShowDownloadSuccessNotification(string directoryPath)
+        {
+            Application.Current.Dispatcher.Invoke(() =>
+            {
+                Growl.Ask(new HandyControl.Data.GrowlInfo
+                {
+                    Message = "下载成功！是否打开文件夹？",
+                    ConfirmStr = "打开文件夹",
+                    CancelStr = "关闭",
+                    IsCustom = true,
+                    IconKey = "SuccessGeometry",
+                    IconBrushKey = "SuccessBrush",
+                    ActionBeforeClose = isConfirmed =>
+                    {
+                        if (isConfirmed)
+                            OpenDirectory(directoryPath);
+                        return true;
+                    }
+                });
+            });
+        }
+
+        private void OpenDirectory(string path)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = path,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                Growl.Error("无法打开文件夹: " + ex.Message);
+            }
         }
     }
 
