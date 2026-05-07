@@ -7,6 +7,7 @@
            xmlns:hc="https://handyorg.github.io/handycontrol"
            xmlns:s="https://github.com/canton7/Stylet"
            xmlns:HelixToolkit="clr-namespace:HelixToolkit.Wpf;assembly=HelixToolkit.Wpf"
+           xmlns:local="clr-namespace:lceda_step_downloader"
            mc:Ignorable="d"
            d:DataContext="{d:DesignInstance Type=viewModels:RootViewModel}"
            Title="{Binding Title}"
@@ -123,7 +124,7 @@
                             <TextBlock Grid.Row="0" Text="原理图" FontSize="12"
                                        HorizontalAlignment="Center" Foreground="#666" Margin="0,2,0,0"/>
                             <WebBrowser Grid.Row="1" Margin="2"
-                                        Source="{Binding SchematicSvgUri}">
+                                        local:WebBrowserHelper.BindableSource="{Binding SchematicSvgUri}">
                                 <WebBrowser.Style>
                                     <Style TargetType="WebBrowser">
                                         <Style.Triggers>
@@ -168,7 +169,7 @@
                             <TextBlock Grid.Row="0" Text="封装" FontSize="12"
                                        HorizontalAlignment="Center" Foreground="#666" Margin="0,2,0,0"/>
                             <WebBrowser Grid.Row="1" Margin="2"
-                                        Source="{Binding FootprintSvgUri}">
+                                        local:WebBrowserHelper.BindableSource="{Binding FootprintSvgUri}">
                                 <WebBrowser.Style>
                                     <Style TargetType="WebBrowser">
                                         <Style.Triggers>
