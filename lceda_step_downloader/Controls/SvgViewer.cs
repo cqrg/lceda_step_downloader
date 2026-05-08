@@ -217,9 +217,10 @@ namespace lceda_step_downloader.Controls
             dc.PushTransform(new ScaleTransform(_zoom, _zoom));
 
             // 将 SKPicture 转换为 WPF 可绘制对象
-            var image = SKImage.FromPicture(_picture, new SKImageInfo(
+            var imageSize = new SKSizeI(
                 (int)(_picture.CullRect.Width * _zoom),
-                (int)(_picture.CullRect.Height * _zoom)));
+                (int)(_picture.CullRect.Height * _zoom));
+            var image = SKImage.FromPicture(_picture, imageSize);
             using var data = image.Encode(SKEncodedImageFormat.Png, 100);
             using var stream = data.AsStream();
             var bitmap = new System.Windows.Media.Imaging.BitmapImage();
