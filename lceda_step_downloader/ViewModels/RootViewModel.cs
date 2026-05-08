@@ -323,11 +323,23 @@ namespace lceda_step_downloader.ViewModels
             if (File.Exists(@".\temp\" + Selecteditem.title.ToString().Replace("/", "") + @".obj"))
             {
                 Debug.WriteLine("存在缓存");
+                var cachedPath = Path.GetFullPath(@".\temp\" + Selecteditem.title.ToString().Replace("/", "") + @".obj");
                 Application.Current.Dispatcher.Invoke(() =>
                 {
-                    ObjReader CurrentHelixObjReader = new();
-                    MyModelGroup = CurrentHelixObjReader.Read(@".\temp\" + Selecteditem.title.ToString().Replace("/", "") + @".obj");
-
+                    MyModelGroup = null;
+                    for (var retry = 0; retry < 3; retry++)
+                    {
+                        try
+                        {
+                            ObjReader CurrentHelixObjReader = new();
+                            MyModelGroup = CurrentHelixObjReader.Read(cachedPath);
+                            return;
+                        }
+                        catch (IOException) when (retry < 2)
+                        {
+                            System.Threading.Thread.Sleep(200);
+                        }
+                    }
                 });
                 return;
             }
@@ -811,14 +823,14 @@ namespace lceda_step_downloader.ViewModels
         {
             if (item == null) return;
 
-            var code = item.product_code?.TrimStart('C');
+            var code = item.product_code;
             if (string.IsNullOrEmpty(code))
             {
                 Growl.Warning("该器件无产品编号");
                 return;
             }
 
-            var url = $"https://item.szlcsc.com/{code}.html";
+            var url = $"https://item.szlcsc.com/search?q={Uri.EscapeDataString(code)}";
             try
             {
                 Process.Start(new ProcessStartInfo
