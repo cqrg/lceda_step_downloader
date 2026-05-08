@@ -711,6 +711,32 @@ namespace lceda_step_downloader.ViewModels
             }
         }
 
+        public void OpenProductPage(ResultItem item)
+        {
+            if (item == null) return;
+
+            var code = item.product_code?.TrimStart('C');
+            if (string.IsNullOrEmpty(code))
+            {
+                Growl.Warning("该器件无产品编号");
+                return;
+            }
+
+            var url = $"https://item.szlcsc.com/{code}.html";
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = url,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                Growl.Error($"无法打开器件详情页: {ex.Message}");
+            }
+        }
+
         public void OpenDatasheetFromList(ResultItem item)
         {
             if (item == null) return;

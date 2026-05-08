@@ -14,8 +14,8 @@
            Title="{Binding Title}"
            WindowStartupLocation="CenterScreen"
            ShowTitle="True"
-           Height="750"
-           Width="1200"
+           Height="900"
+           Width="1440"
            Loaded="RootView_Loaded">
     <Window.Resources>
         <viewModels:IndexConverter x:Key="MyIndexConverter"/>
@@ -67,35 +67,44 @@
                         SelectedItem="{Binding Selecteditem}"
                         SelectionChanged="{s:Action OnResultSelection}"
                         ScrollViewer.HorizontalScrollBarVisibility="Auto">
-                        <ListView.Resources>
-                            <Style TargetType="GridViewColumnHeader">
-                                <Setter Property="Visibility" Value="Collapsed" />
-                            </Style>
-                        </ListView.Resources>
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem" BasedOn="{StaticResource ListViewItemBaseStyle}">
                                 <Setter Property="MinHeight" Value="20"/>
                                 <Setter Property="ToolTipService.ShowDuration" Value="30000"/>
+                                <Setter Property="FontSize" Value="12"/>
                                 <EventSetter Event="MouseEnter" Handler="ListViewItem_MouseEnter"/>
                             </Style>
                         </ListView.ItemContainerStyle>
                         <ListView.View>
                             <GridView AllowsColumnReorder="True">
-                                <GridViewColumn Width="40" DisplayMemberBinding="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ListViewItem}}, Converter={StaticResource MyIndexConverter}}"/>
-                                <GridViewColumn Width="120" Header="编号" DisplayMemberBinding="{Binding product_code}"/>
-                                <GridViewColumn Width="250" Header="描述" DisplayMemberBinding="{Binding Path=display_title}"/>
-                                <GridViewColumn Width="150" Header="厂家" DisplayMemberBinding="{Binding attributes.Manufacturer}"/>
-                                <GridViewColumn Width="150" Header="封装" DisplayMemberBinding="{Binding attributes.Supplier_Footprint}"/>
-                                <GridViewColumn Width="80" Header="数据手册">
+                                <GridViewColumn Width="32" Header="#" DisplayMemberBinding="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ListViewItem}}, Converter={StaticResource MyIndexConverter}}"/>
+                                <GridViewColumn Width="105" Header="编号" DisplayMemberBinding="{Binding product_code}"/>
+                                <GridViewColumn Width="200" Header="描述" DisplayMemberBinding="{Binding Path=display_title}"/>
+                                <GridViewColumn Width="105" Header="厂家" DisplayMemberBinding="{Binding attributes.Manufacturer}"/>
+                                <GridViewColumn Width="120" Header="封装" DisplayMemberBinding="{Binding attributes.Supplier_Footprint}"/>
+                                <GridViewColumn Width="55" Header="手册">
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
                                             <TextBlock>
-                                                <Hyperlink x:Name="DatasheetLink"
-                                                           Command="{s:Action OpenDatasheetFromList}"
+                                                <Hyperlink Command="{s:Action OpenDatasheetFromList}"
                                                            CommandParameter="{Binding}"
                                                            Foreground="#1890ff"
                                                            TextDecorations="Underline">
                                                     <Run Text="查看"/>
+                                                </Hyperlink>
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Width="55" Header="详情">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock>
+                                                <Hyperlink Command="{s:Action OpenProductPage}"
+                                                           CommandParameter="{Binding}"
+                                                           Foreground="#1890ff"
+                                                           TextDecorations="Underline">
+                                                    <Run Text="打开"/>
                                                 </Hyperlink>
                                             </TextBlock>
                                         </DataTemplate>
@@ -129,21 +138,21 @@
                                 <RowDefinition Height="20"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Text="器件图片" FontSize="12"
+                            <TextBlock Grid.Row="0" Text="实物图片" FontSize="12"
                                        HorizontalAlignment="Center" Foreground="#666" Margin="0,2,0,0"/>
                             <Image Grid.Row="1" Source="{Binding ImageSource}"
                                    Stretch="Uniform" Margin="5"/>
                         </Grid>
                     </Border>
 
-                    <!-- 右上：原理图预览 -->
+                    <!-- 右上：引脚图预览 -->
                     <Border Grid.Column="1" BorderBrush="#ccc" BorderThickness="0,0,0,1">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="20"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
-                            <TextBlock Grid.Row="0" Text="原理图" FontSize="12"
+                            <TextBlock Grid.Row="0" Text="引脚图" FontSize="12"
                                        HorizontalAlignment="Center" Foreground="#666" Margin="0,2,0,0"/>
                             <Grid Grid.Row="1" Margin="0">
                                 <wv2:WebView2 x:Name="SchematicViewer"
@@ -158,7 +167,7 @@
                                         </Style>
                                     </wv2:WebView2.Style>
                                 </wv2:WebView2>
-                                <TextBlock Text="暂无原理图"
+                                <TextBlock Text="暂无引脚图"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                            Foreground="#999" FontSize="14">
                                     <TextBlock.Style>
@@ -288,12 +297,12 @@
                             VerticalAlignment="Center">
                         <Button.Style>
                             <Style BasedOn="{StaticResource ButtonDefault}" TargetType="Button">
-                                <Setter Property="Content" Value="下载原理图"/>
+                                <Setter Property="Content" Value="下载引脚图"/>
                                 <Setter Property="IsEnabled" Value="True"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding HasSchematic}" Value="False">
                                         <Setter Property="IsEnabled" Value="False"/>
-                                        <Setter Property="Content" Value="无原理图"/>
+                                        <Setter Property="Content" Value="无引脚图"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -351,9 +360,9 @@
             </Grid>
         </Grid>
 
-        <!-- Growl 通知容器 -->
-        <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalAlignment="Right" Margin="0,0,0,300">
-            <StackPanel hc:Growl.GrowlParent="True" Margin="0,10,10,10"/>
-        </ScrollViewer>
+        <!-- Growl 通知容器 — 放置于左侧底部避开 WebView2 空气域 -->
+        <StackPanel hc:Growl.GrowlParent="True"
+                    HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                    Margin="10,0,0,10"/>
     </Grid>
 </hc:Window>
