@@ -8,6 +8,7 @@
            xmlns:s="https://github.com/canton7/Stylet"
            xmlns:HelixToolkit="clr-namespace:HelixToolkit.Wpf;assembly=HelixToolkit.Wpf"
            xmlns:local="clr-namespace:lceda_step_downloader"
+           xmlns:controls="clr-namespace:lceda_step_downloader.Controls"
            mc:Ignorable="d"
            d:DataContext="{d:DesignInstance Type=viewModels:RootViewModel}"
            Title="{Binding Title}"
@@ -73,15 +74,17 @@
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem" BasedOn="{StaticResource ListViewItemBaseStyle}">
                                 <Setter Property="MinHeight" Value="20"/>
+                                <Setter Property="ToolTipService.ShowDuration" Value="30000"/>
+                                <EventSetter Event="MouseEnter" Handler="ListViewItem_MouseEnter"/>
                             </Style>
                         </ListView.ItemContainerStyle>
                         <ListView.View>
-                            <GridView>
+                            <GridView AllowsColumnReorder="True">
                                 <GridViewColumn Width="40" DisplayMemberBinding="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ListViewItem}}, Converter={StaticResource MyIndexConverter}}"/>
                                 <GridViewColumn Width="120" Header="编号" DisplayMemberBinding="{Binding product_code}"/>
-                                <GridViewColumn Width="160" Header="描述" DisplayMemberBinding="{Binding Path=display_title}"/>
-                                <GridViewColumn Width="100" Header="厂家" DisplayMemberBinding="{Binding attributes.Manufacturer}"/>
-                                <GridViewColumn Width="100" Header="封装" DisplayMemberBinding="{Binding attributes.Supplier_Footprint}"/>
+                                <GridViewColumn Width="200" Header="描述" DisplayMemberBinding="{Binding Path=display_title}"/>
+                                <GridViewColumn Width="120" Header="厂家" DisplayMemberBinding="{Binding attributes.Manufacturer}"/>
+                                <GridViewColumn Width="120" Header="封装" DisplayMemberBinding="{Binding attributes.Supplier_Footprint}"/>
                                 <GridViewColumn Width="60" Header="数据手册">
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
@@ -151,7 +154,7 @@
                                         </Style.Triggers>
                                     </Style>
                                 </Border.Style>
-                                <WebBrowser local:WebBrowserHelper.BindableSource="{Binding SchematicSvgUri}"/>
+                                <controls:SvgViewer SvgPath="{Binding SchematicSvgPath}"/>
                             </Border>
                             <TextBlock Grid.Row="1" Text="暂无原理图"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -196,7 +199,7 @@
                                         </Style.Triggers>
                                     </Style>
                                 </Border.Style>
-                                <WebBrowser local:WebBrowserHelper.BindableSource="{Binding FootprintSvgUri}"/>
+                                <controls:SvgViewer SvgPath="{Binding FootprintSvgPath}"/>
                             </Border>
                             <TextBlock Grid.Row="1" Text="暂无封装"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -237,161 +240,108 @@
 
                 <!-- 按钮区 -->
                 <Grid Grid.Row="2" Margin="0,8,0,10">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="32"/>
-                        <RowDefinition Height="32"/>
-                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
 
-                    <!-- 第一排：3D相关操作 -->
-                    <Grid Grid.Row="0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" x:Name="downloadstep"
+                            Command="{s:Action DownloadStep}"
+                            FontSize="12" Height="28" Margin="3,0,3,0"
+                            VerticalAlignment="Center">
+                        <Button.IsEnabled>
+                            <MultiBinding Converter="{StaticResource MyallowdownloadConverter}">
+                                <Binding Path="Has3DModel"/>
+                                <Binding Path="DownloadAllowed"/>
+                            </MultiBinding>
+                        </Button.IsEnabled>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="下载STEP" FontSize="12"/>
+                            <hc:LoadingCircle Height="16" Width="16" VerticalAlignment="Center"
+                                              Margin="5,0,0,0" DotDiameter="3" DotInterval="10">
+                                <hc:LoadingCircle.Style>
+                                    <Style TargetType="hc:LoadingCircle"
+                                           BasedOn="{StaticResource LoadingBaseStyle}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding DownloadAllowed}" Value="True">
+                                                <Setter Property="Visibility" Value="Hidden"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </hc:LoadingCircle.Style>
+                            </hc:LoadingCircle>
+                        </StackPanel>
+                    </Button>
 
-                        <Button Grid.Column="0" x:Name="showobj"
-                                Command="{s:Action DownloadObj}"
-                                FontSize="12" Height="28" Margin="3,0,3,0"
-                                VerticalAlignment="Center">
-                            <Button.Style>
-                                <Style BasedOn="{StaticResource ButtonDefault}" TargetType="Button">
-                                    <Setter Property="Content" Value="预览3D"/>
-                                    <Setter Property="IsEnabled" Value="True"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding Selecteditem.attributes._3D_Model}"
-                                                     Value="{x:Null}">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Content" Value="暂无3D"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
+                    <Button Grid.Column="1"
+                            Command="{s:Action DownloadSchematic}"
+                            FontSize="12" Height="28" Margin="3,0,3,0"
+                            VerticalAlignment="Center">
+                        <Button.Style>
+                            <Style BasedOn="{StaticResource ButtonDefault}" TargetType="Button">
+                                <Setter Property="Content" Value="下载原理图"/>
+                                <Setter Property="IsEnabled" Value="True"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasSchematic}" Value="False">
+                                        <Setter Property="IsEnabled" Value="False"/>
+                                        <Setter Property="Content" Value="无原理图"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
 
-                        <Button Grid.Column="1" x:Name="downloadstep"
-                                Command="{s:Action DownloadStep}"
-                                FontSize="12" Height="28" Margin="3,0,3,0"
-                                VerticalAlignment="Center">
-                            <Button.IsEnabled>
-                                <MultiBinding Converter="{StaticResource MyallowdownloadConverter}">
-                                    <Binding ElementName="showobj" Path="IsEnabled"/>
-                                    <Binding Path="DownloadAllowed"/>
-                                </MultiBinding>
-                            </Button.IsEnabled>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="下载STEP" FontSize="12"/>
-                                <hc:LoadingCircle Height="16" Width="16" VerticalAlignment="Center"
-                                                  Margin="5,0,0,0" DotDiameter="3" DotInterval="10">
-                                    <hc:LoadingCircle.Style>
-                                        <Style TargetType="hc:LoadingCircle"
-                                               BasedOn="{StaticResource LoadingBaseStyle}">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding DownloadAllowed}" Value="True">
-                                                    <Setter Property="Visibility" Value="Hidden"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </hc:LoadingCircle.Style>
-                                </hc:LoadingCircle>
-                            </StackPanel>
-                        </Button>
+                    <Button Grid.Column="2"
+                            Command="{s:Action DownloadFootprint}"
+                            FontSize="12" Height="28" Margin="3,0,3,0"
+                            VerticalAlignment="Center">
+                        <Button.Style>
+                            <Style BasedOn="{StaticResource ButtonDefault}" TargetType="Button">
+                                <Setter Property="Content" Value="下载封装"/>
+                                <Setter Property="IsEnabled" Value="True"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasFootprint}" Value="False">
+                                        <Setter Property="IsEnabled" Value="False"/>
+                                        <Setter Property="Content" Value="无封装"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
 
-                        <Button Grid.Column="2"
-                                Command="{s:Action DownloadSchematic}"
-                                FontSize="12" Height="28" Margin="3,0,3,0"
-                                VerticalAlignment="Center">
-                            <Button.Style>
-                                <Style BasedOn="{StaticResource ButtonDefault}" TargetType="Button">
-                                    <Setter Property="Content" Value="下载原理图"/>
-                                    <Setter Property="IsEnabled" Value="True"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasSchematic}" Value="False">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Content" Value="无原理图"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
+                    <Button Grid.Column="3"
+                            Command="{s:Action DownloadDatasheet}"
+                            FontSize="12" Height="28" Margin="3,0,3,0"
+                            VerticalAlignment="Center">
+                        <Button.Style>
+                            <Style BasedOn="{StaticResource ButtonDefault}" TargetType="Button">
+                                <Setter Property="Content" Value="规格书"/>
+                                <Setter Property="IsEnabled" Value="True"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasDatasheet}" Value="False">
+                                        <Setter Property="IsEnabled" Value="False"/>
+                                        <Setter Property="Content" Value="无规格书"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
 
-                        <Button Grid.Column="3"
-                                Command="{s:Action DownloadFootprint}"
-                                FontSize="12" Height="28" Margin="3,0,3,0"
-                                VerticalAlignment="Center">
-                            <Button.Style>
-                                <Style BasedOn="{StaticResource ButtonDefault}" TargetType="Button">
-                                    <Setter Property="Content" Value="下载封装"/>
-                                    <Setter Property="IsEnabled" Value="True"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasFootprint}" Value="False">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Content" Value="无封装"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-                    </Grid>
+                    <Button Grid.Column="4"
+                            Command="{s:Action OpenStepFolder}"
+                            FontSize="12" Height="28" Margin="3,0,3,0"
+                            VerticalAlignment="Center"
+                            Content="STEP目录"/>
 
-                    <!-- 第二排：规格书 + 打开目录 -->
-                    <Grid Grid.Row="1" Margin="0,5,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-
-                        <Button Grid.Column="0"
-                                Command="{s:Action OpenDatasheet}"
-                                FontSize="12" Height="28" Margin="3,0,3,0"
-                                VerticalAlignment="Center">
-                            <Button.Style>
-                                <Style BasedOn="{StaticResource ButtonDefault}" TargetType="Button">
-                                    <Setter Property="Content" Value="打开规格书"/>
-                                    <Setter Property="IsEnabled" Value="True"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasDatasheet}" Value="False">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Content" Value="无规格书"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-
-                        <Button Grid.Column="1"
-                                Command="{s:Action DownloadDatasheet}"
-                                FontSize="12" Height="28" Margin="3,0,3,0"
-                                VerticalAlignment="Center">
-                            <Button.Style>
-                                <Style BasedOn="{StaticResource ButtonDefault}" TargetType="Button">
-                                    <Setter Property="Content" Value="下载规格书"/>
-                                    <Setter Property="IsEnabled" Value="True"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding HasDatasheet}" Value="False">
-                                            <Setter Property="IsEnabled" Value="False"/>
-                                            <Setter Property="Content" Value="无规格书"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Button.Style>
-                        </Button>
-
-                        <Button Grid.Column="2"
-                                Command="{s:Action OpenStepFolder}"
-                                FontSize="12" Height="28" Margin="3,0,3,0"
-                                VerticalAlignment="Center"
-                                Content="STEP目录"/>
-
-                        <Button Grid.Column="3"
-                                Command="{s:Action OpenSymbolsFolder}"
-                                FontSize="12" Height="28" Margin="3,0,3,0"
-                                VerticalAlignment="Center"
-                                Content="全部目录"/>
-                    </Grid>
+                    <Button Grid.Column="5"
+                            Command="{s:Action OpenSymbolsFolder}"
+                            FontSize="12" Height="28" Margin="3,0,3,0"
+                            VerticalAlignment="Center"
+                            Content="全部目录"/>
                 </Grid>
             </Grid>
         </Grid>

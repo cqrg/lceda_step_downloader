@@ -159,6 +159,13 @@ namespace lceda_step_downloader.ViewModels
             set => SetAndNotify(ref _hasDatasheet, value);
         }
 
+        private bool _has3DModel;
+        public bool Has3DModel
+        {
+            get => _has3DModel;
+            set => SetAndNotify(ref _has3DModel, value);
+        }
+
         private string _datasheetUrl;
         public string DatasheetUrl
         {
@@ -218,8 +225,67 @@ namespace lceda_step_downloader.ViewModels
                 Debug.WriteLine(streamTask.ToString());
                 SearchResult = await JsonSerializer.DeserializeAsync<Root>(await streamTask);
                 Debug.WriteLine(SearchResult.result.Count);
+
+                // 获取价格信息
+                await FetchPricesAsync();
             }
 
+        }
+
+        private async Task FetchPricesAsync()
+        {
+            if (SearchResult?.result == null) return;
+
+            foreach (var item in SearchResult.result)
+            {
+                try
+                {
+                    var payload = new
+                    {
+                        keyword = item.product_code,
+                        currentPage = 1,
+                        pageSize = 10
+                    };
+                    var content = new StringContent(
+                        JsonSerializer.Serialize(payload),
+                        Encoding.UTF8,
+                        "application/json");
+                    var response = await client.PostAsync(
+                        "https://jlcpcb.com/api/overseas-pcb-order/v1/shoppingCart/smtGood/selectSmtComponentList",
+                        content);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var jsonContent = await response.Content.ReadAsStringAsync();
+                        var result = JsonSerializer.Deserialize<JsonElement>(jsonContent);
+                        if (result.GetProperty("code").GetInt32() == 200)
+                        {
+                            var list = result.GetProperty("data").GetProperty("componentPageInfo").GetProperty("list");
+                            if (list.GetArrayLength() > 0)
+                            {
+                                var prices = list[0].GetProperty("componentPrices");
+                                if (prices.GetArrayLength() > 0)
+                                {
+                                    var priceBuilder = new StringBuilder();
+                                    priceBuilder.AppendLine("价格梯度：");
+                                    foreach (var price in prices.EnumerateArray())
+                                    {
+                                        var start = price.GetProperty("startNumber").GetInt32();
+                                        var end = price.GetProperty("endNumber").GetInt32();
+                                        var unitPrice = price.GetProperty("productPrice").GetDouble();
+                                        var endStr = end == -1 ? "更多" : end.ToString();
+                                        priceBuilder.AppendLine($"{start}-{endStr}: ¥{unitPrice:F4}");
+                                    }
+                                    item.PriceInfo = priceBuilder.ToString().TrimEnd();
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"获取价格失败 {item.product_code}: {ex.Message}");
+                }
+            }
         }
 
         public void OnResultSelection()
@@ -252,9 +318,18 @@ namespace lceda_step_downloader.ViewModels
             HasDatasheet = !string.IsNullOrEmpty(Selecteditem.attributes?.Datasheet);
             DatasheetUrl = Selecteditem.attributes?.Datasheet;
 
+            //3D模型可用性检测
+            Has3DModel = !string.IsNullOrEmpty(Selecteditem.attributes?._3D_Model);
+
             //加载原理图和封装预览
             LoadSchematicPreview();
             LoadFootprintPreview();
+
+            //自动加载3D模型
+            if (Has3DModel)
+            {
+                DownloadObj();
+            }
         }
 
         public void DownloadObj()
@@ -519,11 +594,10 @@ namespace lceda_step_downloader.ViewModels
                             var svgContent = results[0].GetProperty("svg").GetString();
                             if (!string.IsNullOrEmpty(svgContent))
                             {
-                                var htmlContent = CreateSvgHtmlWrapper(svgContent);
-                                var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"schematic_{productCode}.html");
-                                await File.WriteAllTextAsync(tempPath, htmlContent, Encoding.UTF8);
+                                var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"schematic_{productCode}.svg");
+                                await File.WriteAllTextAsync(tempPath, svgContent, Encoding.UTF8);
                                 Application.Current.Dispatcher.Invoke(() => SchematicSvgPath = tempPath);
-                                Debug.WriteLine("原理图 HTML 保存成功");
+                                Debug.WriteLine("原理图 SVG 保存成功");
                                 return;
                             }
                         }
@@ -571,11 +645,10 @@ namespace lceda_step_downloader.ViewModels
                             var svgContent = results[results.GetArrayLength() - 1].GetProperty("svg").GetString();
                             if (!string.IsNullOrEmpty(svgContent))
                             {
-                                var htmlContent = CreateSvgHtmlWrapper(svgContent);
-                                var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"footprint_{productCode}.html");
-                                await File.WriteAllTextAsync(tempPath, htmlContent, Encoding.UTF8);
+                                var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"footprint_{productCode}.svg");
+                                await File.WriteAllTextAsync(tempPath, svgContent, Encoding.UTF8);
                                 Application.Current.Dispatcher.Invoke(() => FootprintSvgPath = tempPath);
-                                Debug.WriteLine("封装 HTML 保存成功");
+                                Debug.WriteLine("封装 SVG 保存成功");
                                 return;
                             }
                         }
@@ -876,34 +949,6 @@ namespace lceda_step_downloader.ViewModels
             {
                 Growl.Error("无法打开文件夹: " + ex.Message);
             }
-        }
-
-        private string CreateSvgHtmlWrapper(string svgContent)
-        {
-            return $@"<!DOCTYPE html>
-<html>
-<head>
-    <meta http-equiv=""X-UA-Compatible"" content=""IE=edge"">
-    <style>
-        body {{
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background: white;
-        }}
-        svg {{
-            max-width: 100%;
-            max-height: 100vh;
-        }}
-    </style>
-</head>
-<body>
-    {svgContent}
-</body>
-</html>";
         }
     }
 

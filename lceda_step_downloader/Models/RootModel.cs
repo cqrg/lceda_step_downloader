@@ -194,6 +194,9 @@ namespace lceda_step_downloader.Models.Root
         public Symbol symbol { get; set; }
 
         public Footprint footprint { get; set; }
+
+        [JsonIgnore]
+        public string PriceInfo { get; set; }
     }
 
     public class Root
