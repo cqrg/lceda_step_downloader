@@ -14,17 +14,17 @@
            WindowStartupLocation="CenterScreen"
            ShowTitle="True"
            Height="750"
-           Width="1100">
+           Width="1200">
     <Window.Resources>
         <viewModels:IndexConverter x:Key="MyIndexConverter"/>
         <viewModels:BooleanOrConverter x:Key="MyallowdownloadConverter"/>
     </Window.Resources>
     <Grid Width="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}}, Path=ActualWidth}"
           Height="{Binding RelativeSource={RelativeSource AncestorType={x:Type Window}}, Path=ActualHeight}">
-        <Grid Margin="0,5,0,28">
+        <Grid Margin="0,5,0,35">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="3*"/>
-                <ColumnDefinition Width="4*"/>
+                <ColumnDefinition Width="1*"/>
+                <ColumnDefinition Width="1*"/>
             </Grid.ColumnDefinitions>
 
             <!-- ===== 左侧：搜索面板 ===== -->
@@ -63,7 +63,8 @@
                         ItemsSource="{Binding SearchResult.result}"
                         Grid.Row="0"
                         SelectedItem="{Binding Selecteditem}"
-                        SelectionChanged="{s:Action OnResultSelection}">
+                        SelectionChanged="{s:Action OnResultSelection}"
+                        ScrollViewer.HorizontalScrollBarVisibility="Disabled">
                         <ListView.Resources>
                             <Style TargetType="GridViewColumnHeader">
                                 <Setter Property="Visibility" Value="Collapsed" />
@@ -77,8 +78,25 @@
                         <ListView.View>
                             <GridView>
                                 <GridViewColumn Width="40" DisplayMemberBinding="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ListViewItem}}, Converter={StaticResource MyIndexConverter}}"/>
-                                <GridViewColumn Width="Auto" DisplayMemberBinding="{Binding Path=display_title}"/>
-                                <GridViewColumn Width="Auto" DisplayMemberBinding="{Binding attributes.Manufacturer}"/>
+                                <GridViewColumn Width="120" Header="编号" DisplayMemberBinding="{Binding product_code}"/>
+                                <GridViewColumn Width="160" Header="描述" DisplayMemberBinding="{Binding Path=display_title}"/>
+                                <GridViewColumn Width="100" Header="厂家" DisplayMemberBinding="{Binding attributes.Manufacturer}"/>
+                                <GridViewColumn Width="100" Header="封装" DisplayMemberBinding="{Binding attributes.Supplier_Footprint}"/>
+                                <GridViewColumn Width="60" Header="数据手册">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock>
+                                                <Hyperlink x:Name="DatasheetLink"
+                                                           Command="{s:Action OpenDatasheetFromList}"
+                                                           CommandParameter="{Binding}"
+                                                           Foreground="#1890ff"
+                                                           TextDecorations="Underline">
+                                                    <Run Text="查看"/>
+                                                </Hyperlink>
+                                            </TextBlock>
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
                             </GridView>
                         </ListView.View>
                     </ListView>
@@ -123,18 +141,18 @@
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Text="原理图" FontSize="12"
                                        HorizontalAlignment="Center" Foreground="#666" Margin="0,2,0,0"/>
-                            <WebBrowser Grid.Row="1" Margin="2"
-                                        local:WebBrowserHelper.BindableSource="{Binding SchematicSvgUri}">
-                                <WebBrowser.Style>
-                                    <Style TargetType="WebBrowser">
+                            <Border Grid.Row="1" Margin="2">
+                                <Border.Style>
+                                    <Style TargetType="Border">
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding HasSchematic}" Value="False">
                                                 <Setter Property="Visibility" Value="Collapsed"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
-                                </WebBrowser.Style>
-                            </WebBrowser>
+                                </Border.Style>
+                                <WebBrowser local:WebBrowserHelper.BindableSource="{Binding SchematicSvgUri}"/>
+                            </Border>
                             <TextBlock Grid.Row="1" Text="暂无原理图"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        Foreground="#999" FontSize="14">
@@ -168,18 +186,18 @@
                             </Grid.RowDefinitions>
                             <TextBlock Grid.Row="0" Text="封装" FontSize="12"
                                        HorizontalAlignment="Center" Foreground="#666" Margin="0,2,0,0"/>
-                            <WebBrowser Grid.Row="1" Margin="2"
-                                        local:WebBrowserHelper.BindableSource="{Binding FootprintSvgUri}">
-                                <WebBrowser.Style>
-                                    <Style TargetType="WebBrowser">
+                            <Border Grid.Row="1" Margin="2">
+                                <Border.Style>
+                                    <Style TargetType="Border">
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding HasFootprint}" Value="False">
                                                 <Setter Property="Visibility" Value="Collapsed"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
-                                </WebBrowser.Style>
-                            </WebBrowser>
+                                </Border.Style>
+                                <WebBrowser local:WebBrowserHelper.BindableSource="{Binding FootprintSvgUri}"/>
+                            </Border>
                             <TextBlock Grid.Row="1" Text="暂无封装"
                                        HorizontalAlignment="Center" VerticalAlignment="Center"
                                        Foreground="#999" FontSize="14">
@@ -218,10 +236,10 @@
                 </Grid>
 
                 <!-- 按钮区 -->
-                <Grid Grid.Row="2" Margin="0,5,0,10">
+                <Grid Grid.Row="2" Margin="0,8,0,10">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="30"/>
-                        <RowDefinition Height="30"/>
+                        <RowDefinition Height="32"/>
+                        <RowDefinition Height="32"/>
                     </Grid.RowDefinitions>
 
                     <!-- 第一排：3D相关操作 -->
@@ -235,8 +253,8 @@
 
                         <Button Grid.Column="0" x:Name="showobj"
                                 Command="{s:Action DownloadObj}"
-                                FontSize="13" Height="26" Margin="3,0,3,0"
-                                Padding="0" VerticalAlignment="Center">
+                                FontSize="12" Height="28" Margin="3,0,3,0"
+                                VerticalAlignment="Center">
                             <Button.Style>
                                 <Style BasedOn="{StaticResource ButtonDefault}" TargetType="Button">
                                     <Setter Property="Content" Value="预览3D"/>
@@ -254,8 +272,8 @@
 
                         <Button Grid.Column="1" x:Name="downloadstep"
                                 Command="{s:Action DownloadStep}"
-                                FontSize="13" Height="26" Margin="3,0,3,0"
-                                Padding="0" VerticalAlignment="Center">
+                                FontSize="12" Height="28" Margin="3,0,3,0"
+                                VerticalAlignment="Center">
                             <Button.IsEnabled>
                                 <MultiBinding Converter="{StaticResource MyallowdownloadConverter}">
                                     <Binding ElementName="showobj" Path="IsEnabled"/>
@@ -263,7 +281,7 @@
                                 </MultiBinding>
                             </Button.IsEnabled>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="下载STEP" FontSize="13"/>
+                                <TextBlock Text="下载STEP" FontSize="12"/>
                                 <hc:LoadingCircle Height="16" Width="16" VerticalAlignment="Center"
                                                   Margin="5,0,0,0" DotDiameter="3" DotInterval="10">
                                     <hc:LoadingCircle.Style>
@@ -282,8 +300,8 @@
 
                         <Button Grid.Column="2"
                                 Command="{s:Action DownloadSchematic}"
-                                FontSize="13" Height="26" Margin="3,0,3,0"
-                                Padding="0" VerticalAlignment="Center">
+                                FontSize="12" Height="28" Margin="3,0,3,0"
+                                VerticalAlignment="Center">
                             <Button.Style>
                                 <Style BasedOn="{StaticResource ButtonDefault}" TargetType="Button">
                                     <Setter Property="Content" Value="下载原理图"/>
@@ -300,8 +318,8 @@
 
                         <Button Grid.Column="3"
                                 Command="{s:Action DownloadFootprint}"
-                                FontSize="13" Height="26" Margin="3,0,3,0"
-                                Padding="0" VerticalAlignment="Center">
+                                FontSize="12" Height="28" Margin="3,0,3,0"
+                                VerticalAlignment="Center">
                             <Button.Style>
                                 <Style BasedOn="{StaticResource ButtonDefault}" TargetType="Button">
                                     <Setter Property="Content" Value="下载封装"/>
@@ -328,8 +346,8 @@
 
                         <Button Grid.Column="0"
                                 Command="{s:Action OpenDatasheet}"
-                                FontSize="13" Height="26" Margin="3,0,3,0"
-                                Padding="0" VerticalAlignment="Center">
+                                FontSize="12" Height="28" Margin="3,0,3,0"
+                                VerticalAlignment="Center">
                             <Button.Style>
                                 <Style BasedOn="{StaticResource ButtonDefault}" TargetType="Button">
                                     <Setter Property="Content" Value="打开规格书"/>
@@ -346,8 +364,8 @@
 
                         <Button Grid.Column="1"
                                 Command="{s:Action DownloadDatasheet}"
-                                FontSize="13" Height="26" Margin="3,0,3,0"
-                                Padding="0" VerticalAlignment="Center">
+                                FontSize="12" Height="28" Margin="3,0,3,0"
+                                VerticalAlignment="Center">
                             <Button.Style>
                                 <Style BasedOn="{StaticResource ButtonDefault}" TargetType="Button">
                                     <Setter Property="Content" Value="下载规格书"/>
@@ -364,14 +382,14 @@
 
                         <Button Grid.Column="2"
                                 Command="{s:Action OpenStepFolder}"
-                                FontSize="13" Height="26" Margin="3,0,3,0"
-                                Padding="0" VerticalAlignment="Center"
+                                FontSize="12" Height="28" Margin="3,0,3,0"
+                                VerticalAlignment="Center"
                                 Content="STEP目录"/>
 
                         <Button Grid.Column="3"
                                 Command="{s:Action OpenSymbolsFolder}"
-                                FontSize="13" Height="26" Margin="3,0,3,0"
-                                Padding="0" VerticalAlignment="Center"
+                                FontSize="12" Height="28" Margin="3,0,3,0"
+                                VerticalAlignment="Center"
                                 Content="全部目录"/>
                     </Grid>
                 </Grid>

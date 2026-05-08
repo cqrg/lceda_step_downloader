@@ -109,7 +109,7 @@ namespace lceda_step_downloader.ViewModels
             set
             {
                 SetAndNotify(ref _schematicSvgPath, value);
-                SchematicSvgUri = value != null ? new Uri(value) : null;
+                SchematicSvgUri = value != null ? new Uri("file:///" + value.Replace("\\", "/")) : null;
             }
         }
 
@@ -127,7 +127,7 @@ namespace lceda_step_downloader.ViewModels
             set
             {
                 SetAndNotify(ref _footprintSvgPath, value);
-                FootprintSvgUri = value != null ? new Uri(value) : null;
+                FootprintSvgUri = value != null ? new Uri("file:///" + value.Replace("\\", "/")) : null;
             }
         }
 
@@ -499,20 +499,56 @@ namespace lceda_step_downloader.ViewModels
             try
             {
                 var uuid = Selecteditem.symbol.uuid;
-                var streamTask = client.GetStreamAsync(
-                    $"https://pro.lceda.cn/api/components/{uuid}?uuid={uuid}");
-                var component = await JsonSerializer.DeserializeAsync<Component>(await streamTask);
+                Debug.WriteLine($"获取原理图 SVG: {uuid}");
+                string svgContent = null;
 
-                if (component?.result?.dataStr != null)
+                // 尝试从图片服务获取 SVG
+                var svgUrl = $"https://image.lceda.cn/symbol/{uuid}.svg";
+                Debug.WriteLine($"尝试 URL: {svgUrl}");
+                var response = await client.GetAsync(svgUrl);
+                if (response.IsSuccessStatusCode)
                 {
-                    var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"schematic_{uuid}.svg");
-                    await File.WriteAllTextAsync(tempPath, component.result.dataStr, Encoding.UTF8);
+                    svgContent = await response.Content.ReadAsStringAsync();
+                    Debug.WriteLine($"SVG 内容长度: {svgContent.Length}");
+                    if (string.IsNullOrEmpty(svgContent) || !svgContent.Contains("<svg"))
+                    {
+                        svgContent = null;
+                    }
+                }
+
+                // 备选方案：从组件 API 获取
+                if (svgContent == null)
+                {
+                    Debug.WriteLine("尝试从组件 API 获取...");
+                    var streamTask = client.GetStreamAsync(
+                        $"https://pro.lceda.cn/api/components/{uuid}?uuid={uuid}");
+                    var component = await JsonSerializer.DeserializeAsync<Component>(await streamTask);
+
+                    if (component?.result?.dataStr != null)
+                    {
+                        svgContent = component.result.dataStr;
+                        Debug.WriteLine($"组件 API 返回 dataStr 长度: {svgContent.Length}");
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(svgContent))
+                {
+                    // 创建 HTML 包装器以确保 SVG 正确显示
+                    var htmlContent = CreateSvgHtmlWrapper(svgContent);
+                    var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"schematic_{uuid}.html");
+                    await File.WriteAllTextAsync(tempPath, htmlContent, Encoding.UTF8);
                     Application.Current.Dispatcher.Invoke(() => SchematicSvgPath = tempPath);
+                    Debug.WriteLine("原理图 HTML 保存成功");
+                }
+                else
+                {
+                    Debug.WriteLine("无法获取原理图数据");
                 }
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"获取原理图失败: {ex.Message}");
+                Debug.WriteLine($"堆栈跟踪: {ex.StackTrace}");
             }
         }
 
@@ -527,30 +563,60 @@ namespace lceda_step_downloader.ViewModels
             try
             {
                 var uuid = Selecteditem.footprint.uuid;
+                Debug.WriteLine($"获取封装 SVG: {uuid}");
+                string svgContent = null;
+
+                // 尝试从图片服务获取 SVG
                 var svgUrl = $"https://image.lceda.cn/package/{uuid}.svg";
+                Debug.WriteLine($"尝试 URL: {svgUrl}");
                 var response = await client.GetAsync(svgUrl);
                 if (response.IsSuccessStatusCode)
                 {
-                    var svgContent = await response.Content.ReadAsStringAsync();
-                    var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"footprint_{uuid}.svg");
-                    await File.WriteAllTextAsync(tempPath, svgContent, Encoding.UTF8);
-                    Application.Current.Dispatcher.Invoke(() => FootprintSvgPath = tempPath);
-                    return;
+                    svgContent = await response.Content.ReadAsStringAsync();
+                    Debug.WriteLine($"SVG 内容长度: {svgContent.Length}");
+                    if (string.IsNullOrEmpty(svgContent) || !svgContent.Contains("<svg"))
+                    {
+                        Debug.WriteLine($"返回内容不是有效 SVG");
+                        svgContent = null;
+                    }
+                }
+                else
+                {
+                    Debug.WriteLine($"图片服务返回状态码: {response.StatusCode}");
                 }
 
-                var streamTask = client.GetStreamAsync(
-                    $"https://pro.lceda.cn/api/components/{uuid}?uuid={uuid}");
-                var component = await JsonSerializer.DeserializeAsync<Component>(await streamTask);
-                if (component?.result?.dataStr != null)
+                // 备选方案：从组件 API 获取
+                if (svgContent == null)
                 {
-                    var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"footprint_{uuid}.svg");
-                    await File.WriteAllTextAsync(tempPath, component.result.dataStr, Encoding.UTF8);
+                    Debug.WriteLine("尝试从组件 API 获取...");
+                    var streamTask = client.GetStreamAsync(
+                        $"https://pro.lceda.cn/api/components/{uuid}?uuid={uuid}");
+                    var component = await JsonSerializer.DeserializeAsync<Component>(await streamTask);
+                    if (component?.result?.dataStr != null)
+                    {
+                        svgContent = component.result.dataStr;
+                        Debug.WriteLine($"组件 API 返回 dataStr 长度: {svgContent.Length}");
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(svgContent))
+                {
+                    // 创建 HTML 包装器以确保 SVG 正确显示
+                    var htmlContent = CreateSvgHtmlWrapper(svgContent);
+                    var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"footprint_{uuid}.html");
+                    await File.WriteAllTextAsync(tempPath, htmlContent, Encoding.UTF8);
                     Application.Current.Dispatcher.Invoke(() => FootprintSvgPath = tempPath);
+                    Debug.WriteLine("封装 HTML 保存成功");
+                }
+                else
+                {
+                    Debug.WriteLine("无法获取封装数据");
                 }
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"获取封装失败: {ex.Message}");
+                Debug.WriteLine($"堆栈跟踪: {ex.StackTrace}");
             }
         }
 
@@ -575,14 +641,23 @@ namespace lceda_step_downloader.ViewModels
         {
             try
             {
+                var uuid = Selecteditem.symbol.uuid;
                 string svgContent = null;
-                if (!string.IsNullOrEmpty(SchematicSvgPath) && File.Exists(SchematicSvgPath))
+
+                // 直接从 API 获取 SVG 内容
+                var svgUrl = $"https://image.lceda.cn/symbol/{uuid}.svg";
+                var response = await client.GetAsync(svgUrl);
+                if (response.IsSuccessStatusCode)
                 {
-                    svgContent = await File.ReadAllTextAsync(SchematicSvgPath, Encoding.UTF8);
+                    svgContent = await response.Content.ReadAsStringAsync();
+                    if (string.IsNullOrEmpty(svgContent) || !svgContent.Contains("<svg"))
+                    {
+                        svgContent = null;
+                    }
                 }
-                else
+
+                if (svgContent == null)
                 {
-                    var uuid = Selecteditem.symbol.uuid;
                     var streamTask = client.GetStreamAsync(
                         $"https://pro.lceda.cn/api/components/{uuid}?uuid={uuid}");
                     var component = await JsonSerializer.DeserializeAsync<Component>(await streamTask);
@@ -629,16 +704,27 @@ namespace lceda_step_downloader.ViewModels
         {
             try
             {
+                var uuid = Selecteditem.footprint.uuid;
                 string svgContent = null;
-                var svgUrl = $"https://image.lceda.cn/package/{Selecteditem.footprint.uuid}.svg";
+
+                // 直接从图片服务获取 SVG
+                var svgUrl = $"https://image.lceda.cn/package/{uuid}.svg";
                 var response = await client.GetAsync(svgUrl);
                 if (response.IsSuccessStatusCode)
                 {
                     svgContent = await response.Content.ReadAsStringAsync();
+                    if (string.IsNullOrEmpty(svgContent) || !svgContent.Contains("<svg"))
+                    {
+                        svgContent = null;
+                    }
                 }
-                else if (!string.IsNullOrEmpty(FootprintSvgPath) && File.Exists(FootprintSvgPath))
+
+                if (svgContent == null)
                 {
-                    svgContent = await File.ReadAllTextAsync(FootprintSvgPath, Encoding.UTF8);
+                    var streamTask = client.GetStreamAsync(
+                        $"https://pro.lceda.cn/api/components/{uuid}?uuid={uuid}");
+                    var component = await JsonSerializer.DeserializeAsync<Component>(await streamTask);
+                    svgContent = component?.result?.dataStr;
                 }
 
                 if (string.IsNullOrEmpty(svgContent))
@@ -664,11 +750,18 @@ namespace lceda_step_downloader.ViewModels
         {
             if (!HasDatasheet || string.IsNullOrEmpty(DatasheetUrl)) return;
 
+            var url = DatasheetUrl;
+            // 确保 URL 以 http 开头
+            if (!url.StartsWith("http://") && !url.StartsWith("https://"))
+            {
+                url = "https:" + url;
+            }
+
             try
             {
                 Process.Start(new ProcessStartInfo
                 {
-                    FileName = DatasheetUrl,
+                    FileName = url,
                     UseShellExecute = true
                 });
             }
@@ -678,11 +771,48 @@ namespace lceda_step_downloader.ViewModels
             }
         }
 
+        public void OpenDatasheetFromList(ResultItem item)
+        {
+            if (item == null) return;
+
+            var datasheetUrl = item.attributes?.Datasheet;
+            if (string.IsNullOrEmpty(datasheetUrl))
+            {
+                Growl.Warning("该器件暂无数据手册");
+                return;
+            }
+
+            // 确保 URL 以 http 开头
+            if (!datasheetUrl.StartsWith("http://") && !datasheetUrl.StartsWith("https://"))
+            {
+                datasheetUrl = "https:" + datasheetUrl;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = datasheetUrl,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                Growl.Error($"无法打开数据手册: {ex.Message}");
+            }
+        }
+
         public void DownloadDatasheet()
         {
             if (!HasDatasheet || string.IsNullOrEmpty(DatasheetUrl)) return;
 
             var url = DatasheetUrl;
+            // 确保 URL 以 http 开头
+            if (!url.StartsWith("http://") && !url.StartsWith("https://"))
+            {
+                url = "https:" + url;
+            }
+
             var fileName = string.Join("_",
                 Selecteditem.display_title.ToString().Split(Path.GetInvalidFileNameChars())) + ".pdf";
             var filePath = Path.Combine(AppContext.BaseDirectory, "datasheets", fileName);
@@ -780,6 +910,34 @@ namespace lceda_step_downloader.ViewModels
             {
                 Growl.Error("无法打开文件夹: " + ex.Message);
             }
+        }
+
+        private string CreateSvgHtmlWrapper(string svgContent)
+        {
+            return $@"<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv=""X-UA-Compatible"" content=""IE=edge"">
+    <style>
+        body {{
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: white;
+        }}
+        svg {{
+            max-width: 100%;
+            max-height: 100vh;
+        }}
+    </style>
+</head>
+<body>
+    {svgContent}
+</body>
+</html>";
         }
     }
 
