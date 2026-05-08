@@ -303,7 +303,23 @@ namespace lceda_step_downloader.ViewModels
             }
             else
             {
-                ImageSource = Selecteditem.images[0];
+                // 尝试获取大图，将 middle 替换为 large
+                var imageUrl = Selecteditem.images[0];
+                if (imageUrl.Contains("/middle/"))
+                {
+                    var largeUrl = imageUrl.Replace("/middle/", "/large/");
+                    // 验证大图是否存在
+                    try
+                    {
+                        var headResponse = client.SendAsync(new HttpRequestMessage(HttpMethod.Head, largeUrl)).Result;
+                        if (headResponse.IsSuccessStatusCode)
+                        {
+                            imageUrl = largeUrl;
+                        }
+                    }
+                    catch { }
+                }
+                ImageSource = imageUrl;
             }
 
             //原理图可用性检测

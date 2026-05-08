@@ -65,7 +65,7 @@
                         Grid.Row="0"
                         SelectedItem="{Binding Selecteditem}"
                         SelectionChanged="{s:Action OnResultSelection}"
-                        ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        ScrollViewer.HorizontalScrollBarVisibility="Auto">
                         <ListView.Resources>
                             <Style TargetType="GridViewColumnHeader">
                                 <Setter Property="Visibility" Value="Collapsed" />
@@ -82,10 +82,10 @@
                             <GridView AllowsColumnReorder="True">
                                 <GridViewColumn Width="40" DisplayMemberBinding="{Binding RelativeSource={RelativeSource FindAncestor, AncestorType={x:Type ListViewItem}}, Converter={StaticResource MyIndexConverter}}"/>
                                 <GridViewColumn Width="120" Header="编号" DisplayMemberBinding="{Binding product_code}"/>
-                                <GridViewColumn Width="200" Header="描述" DisplayMemberBinding="{Binding Path=display_title}"/>
-                                <GridViewColumn Width="120" Header="厂家" DisplayMemberBinding="{Binding attributes.Manufacturer}"/>
-                                <GridViewColumn Width="120" Header="封装" DisplayMemberBinding="{Binding attributes.Supplier_Footprint}"/>
-                                <GridViewColumn Width="60" Header="数据手册">
+                                <GridViewColumn Width="250" Header="描述" DisplayMemberBinding="{Binding Path=display_title}"/>
+                                <GridViewColumn Width="150" Header="厂家" DisplayMemberBinding="{Binding attributes.Manufacturer}"/>
+                                <GridViewColumn Width="150" Header="封装" DisplayMemberBinding="{Binding attributes.Supplier_Footprint}"/>
+                                <GridViewColumn Width="80" Header="数据手册">
                                     <GridViewColumn.CellTemplate>
                                         <DataTemplate>
                                             <TextBlock>
