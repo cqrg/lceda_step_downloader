@@ -165,26 +165,8 @@ namespace lceda_step_downloader.ViewModels
             SSite = SearchSites[0];
 
             //创建模型存储目录
-            if (!Directory.Exists(@".\temp"))
-            {
-                Directory.CreateDirectory(@".\temp");
-            }
-            if (!Directory.Exists(@".\step"))
-            {
-                Directory.CreateDirectory(@".\step");
-            }
-            if (!Directory.Exists(@".\symbols"))
-            {
-                Directory.CreateDirectory(@".\symbols");
-            }
-            if (!Directory.Exists(@".\footprints"))
-            {
-                Directory.CreateDirectory(@".\footprints");
-            }
-            if (!Directory.Exists(@".\datasheets"))
-            {
-                Directory.CreateDirectory(@".\datasheets");
-            }
+            Array.ForEach(new[] { "temp", "step", "symbols", "footprints", "datasheets", "pinlists" },
+                d => Directory.CreateDirectory(@".\" + d));
         }
 
         public void DoSearch(string argument)
@@ -606,44 +588,158 @@ namespace lceda_step_downloader.ViewModels
             }
         }
 
-        public void DownloadSchematic()
+        public void GeneratePinList()
         {
             if (Selecteditem == null || !HasSchematic) return;
 
+            var item = Selecteditem;
             var fileName = string.Join("_",
-                Selecteditem.symbol.display_title.ToString().Split(Path.GetInvalidFileNameChars()));
-            var filePath = Path.Combine(AppContext.BaseDirectory, "symbols", fileName + ".svg");
+                item.symbol.display_title.Split(Path.GetInvalidFileNameChars()));
+            var filePath = Path.Combine(AppContext.BaseDirectory, "pinlists", fileName + ".csv");
 
             if (File.Exists(filePath))
             {
-                ShowFileExistsNotification(Path.GetDirectoryName(filePath), "原理图文件已存在");
+                ShowFileExistsNotification(Path.GetDirectoryName(filePath), "引脚列表文件已存在");
                 return;
             }
 
-            Task.Run(() => DownloadSchematicAsync(filePath));
+            Task.Run(() => GeneratePinListAsync(filePath, item));
         }
 
-        private async Task DownloadSchematicAsync(string filePath)
+        private async Task GeneratePinListAsync(string filePath, ResultItem item)
         {
             try
             {
-                var svgs = await FetchSvgsAsync(Selecteditem.product_code);
-                if (svgs == null || !svgs.TryGetValue(DocTypeSymbol, out var svgContent))
+                var apiUrl = $"https://pro.lceda.cn/api/components/{item.symbol.uuid}?uuid={item.symbol.uuid}";
+                var response = await client.GetAsync(apiUrl);
+                response.EnsureSuccessStatusCode();
+                var rawBytes = await response.Content.ReadAsByteArrayAsync();
+
+                // 尝试用 UTF-8 解码，跳过 BOM
+                var rawContent = Encoding.UTF8.GetString(rawBytes).TrimStart('﻿', ' ', '\t', '\r', '\n');
+
+                // 如果不是合法 JSON 开头，尝试写入诊断文件
+                if (rawContent.Length == 0 || (rawContent[0] != '{' && rawContent[0] != '['))
                 {
+                    var diagPath = Path.Combine(AppContext.BaseDirectory, "pinlist_debug.txt");
+                    await File.WriteAllBytesAsync(diagPath, rawBytes);
                     Application.Current.Dispatcher.Invoke(() =>
-                        Growl.Error("无法获取原理图数据"));
+                        Growl.Error($"API 返回非 JSON 数据，已写入 {diagPath}"));
                     return;
                 }
 
-                await File.WriteAllTextAsync(filePath, svgContent, Encoding.UTF8);
+                JsonDocument doc;
+                try
+                {
+                    doc = JsonDocument.Parse(rawContent);
+                }
+                catch (JsonException)
+                {
+                    var diagPath = Path.Combine(AppContext.BaseDirectory, "pinlist_debug.txt");
+                    await File.WriteAllTextAsync(diagPath, $"JSON 解析失败，Content-Length: {rawContent.Length}\n\n{rawContent.Substring(0, Math.Min(500, rawContent.Length))}");
+                    Application.Current.Dispatcher.Invoke(() =>
+                        Growl.Error($"JSON 解析失败，已写入 {diagPath}"));
+                    return;
+                }
+                using (doc)
+                {
+                var root = doc.RootElement;
+
+                if (!root.TryGetProperty("success", out var success) || !success.GetBoolean())
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                        Growl.Error("获取符号数据失败"));
+                    return;
+                }
+
+                var result = root.GetProperty("result");
+                var dataStr = result.TryGetProperty("dataStr", out var dataStrElem)
+                    ? dataStrElem.GetString()
+                    : null;
+                if (string.IsNullOrEmpty(dataStr))
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                        Growl.Warning("未找到引脚信息"));
+                    return;
+                }
+
+                var pins = ExtractPins(dataStr);
+
+                if (pins.Count == 0)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                        Growl.Warning("未找到引脚信息"));
+                    return;
+                }
+
+                var csv = new StringBuilder();
+                csv.AppendLine("PinNumber,PinName");
+                foreach (var pin in pins)
+                    csv.AppendLine($"{pin.Key},{pin.Value}");
+
+                await File.WriteAllTextAsync(filePath, csv.ToString(), Encoding.UTF8);
                 Application.Current.Dispatcher.Invoke(() =>
                     ShowDownloadSuccessNotification(Path.GetDirectoryName(filePath)));
+                }
             }
             catch (Exception ex)
             {
                 Application.Current.Dispatcher.Invoke(() =>
-                    Growl.Error($"原理图下载失败: {ex.Message}"));
+                    Growl.Error($"引脚列表生成失败: {ex.Message}"));
             }
+        }
+
+        private static List<KeyValuePair<string, string>> ExtractPins(string dataStr)
+        {
+            var pinIds = new List<string>();
+            var pinNames = new Dictionary<string, string>();
+            var pinNumbers = new Dictionary<string, string>();
+
+            foreach (var line in dataStr.Split('\n'))
+            {
+                var trimmed = line.Trim();
+                if (string.IsNullOrEmpty(trimmed) || trimmed[0] != '[') continue;
+
+                JsonElement[] cols;
+                try
+                {
+                    cols = JsonSerializer.Deserialize<JsonElement[]>(trimmed);
+                }
+                catch (JsonException)
+                {
+                    continue;
+                }
+
+                if (cols == null || cols.Length < 4) continue;
+
+                var type = cols[0].GetString();
+                if (type == "PIN")
+                {
+                    pinIds.Add(cols[1].GetString());
+                }
+                else if (type == "ATTR" && cols.Length >= 5)
+                {
+                    var parentId = cols[2].GetString();
+                    var attrType = cols[3].GetString();
+                    var attrValue = cols[4].GetString();
+
+                    if (attrType == "NAME")
+                        pinNames[parentId] = attrValue;
+                    else if (attrType == "NUMBER")
+                        pinNumbers[parentId] = attrValue;
+                }
+            }
+
+            var pins = new List<KeyValuePair<string, string>>();
+            foreach (var pinId in pinIds)
+            {
+                pinNames.TryGetValue(pinId, out var name);
+                pinNumbers.TryGetValue(pinId, out var number);
+                if (!string.IsNullOrEmpty(number))
+                    pins.Add(new KeyValuePair<string, string>(number, name ?? ""));
+            }
+
+            return pins;
         }
 
         public void DownloadFootprint()

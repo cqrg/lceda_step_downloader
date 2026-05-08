@@ -47,9 +47,9 @@ namespace lceda_step_downloader.Models.Component
     public class Tags
     {
 
-        public List<string> parent_tag { get; set; }
+        public System.Text.Json.JsonElement? parent_tag { get; set; }
 
-        public List<string> child_tag { get; set; }
+        public System.Text.Json.JsonElement? child_tag { get; set; }
     }
 
     public class Result
@@ -76,8 +76,7 @@ namespace lceda_step_downloader.Models.Component
 
         public string source { get; set; }
 
-        [JsonIgnore]
-        public string version { get; set; }
+        public System.Text.Json.JsonElement? version { get; set; }
 
         public int type { get; set; }
 
