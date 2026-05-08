@@ -66,11 +66,20 @@ html,body{width:100%;height:100%;overflow:hidden;background:" + bgColor + @"}
 #wrap{width:100%;height:100%;overflow:hidden;position:relative;cursor:grab}
 #wrap:active{cursor:grabbing}
 #wrap svg{position:absolute;top:0;left:0;display:block}
+#controls{position:fixed;bottom:6px;right:6px;z-index:999;display:flex;gap:3px;opacity:0.7;transition:opacity .2s}
+#controls:hover{opacity:1}
+#controls button{width:28px;height:26px;border:1px solid #999;border-radius:3px;background:" + bgColor + @";color:" + (bgColor == "#000000" ? "#ccc" : "#333") + @";font-size:13px;cursor:pointer;line-height:1;display:flex;align-items:center;justify-content:center}
+#controls button:hover{background:" + (bgColor == "#000000" ? "#333" : "#e0e0e0") + @"}
 </style>
 </head>
 <body>
 <div id='wrap'>
 " + svgContent + @"
+</div>
+<div id='controls'>
+  <button onclick='__svgControl.recenter()' title='回中'>⊕</button>
+  <button onclick='__svgControl.zoomOut()' title='缩小'>−</button>
+  <button onclick='__svgControl.zoomIn()' title='放大'>+</button>
 </div>
 <script>
 (function(){
@@ -182,42 +191,5 @@ window.__svgControl={
             }
         }
 
-        // Schematic overlay buttons
-        private async void SchematicRecenter_Click(object sender, RoutedEventArgs e)
-        {
-            if (SchematicViewer.CoreWebView2 != null)
-                await SchematicViewer.CoreWebView2.ExecuteScriptAsync("window.__svgControl.recenter()");
-        }
-
-        private async void SchematicZoomOut_Click(object sender, RoutedEventArgs e)
-        {
-            if (SchematicViewer.CoreWebView2 != null)
-                await SchematicViewer.CoreWebView2.ExecuteScriptAsync("window.__svgControl.zoomOut()");
-        }
-
-        private async void SchematicZoomIn_Click(object sender, RoutedEventArgs e)
-        {
-            if (SchematicViewer.CoreWebView2 != null)
-                await SchematicViewer.CoreWebView2.ExecuteScriptAsync("window.__svgControl.zoomIn()");
-        }
-
-        // Footprint overlay buttons
-        private async void FootprintRecenter_Click(object sender, RoutedEventArgs e)
-        {
-            if (FootprintViewer.CoreWebView2 != null)
-                await FootprintViewer.CoreWebView2.ExecuteScriptAsync("window.__svgControl.recenter()");
-        }
-
-        private async void FootprintZoomOut_Click(object sender, RoutedEventArgs e)
-        {
-            if (FootprintViewer.CoreWebView2 != null)
-                await FootprintViewer.CoreWebView2.ExecuteScriptAsync("window.__svgControl.zoomOut()");
-        }
-
-        private async void FootprintZoomIn_Click(object sender, RoutedEventArgs e)
-        {
-            if (FootprintViewer.CoreWebView2 != null)
-                await FootprintViewer.CoreWebView2.ExecuteScriptAsync("window.__svgControl.zoomIn()");
-        }
     }
 }

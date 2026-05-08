@@ -158,34 +158,6 @@
                                         </Style>
                                     </wv2:WebView2.Style>
                                 </wv2:WebView2>
-                                <!-- 右下角悬浮按钮 -->
-                                <Border Background="#AAE8E8E8" CornerRadius="3" Padding="2"
-                                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                        Margin="0,0,4,4">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding HasSchematic}" Value="False">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <StackPanel Orientation="Horizontal">
-                                        <Button x:Name="SchematicRecenter" Content="回中"
-                                                Width="28" Height="26" FontSize="10" Padding="2,0"
-                                                Click="SchematicRecenter_Click" Margin="1,0"
-                                                ToolTip="适配窗口"/>
-                                        <Button x:Name="SchematicZoomOut" Content="−"
-                                                Width="26" Height="26" FontSize="14" FontWeight="Bold" Padding="0"
-                                                Click="SchematicZoomOut_Click" Margin="1,0"
-                                                ToolTip="缩小"/>
-                                        <Button x:Name="SchematicZoomIn" Content="+"
-                                                Width="26" Height="26" FontSize="14" FontWeight="Bold" Padding="0"
-                                                Click="SchematicZoomIn_Click" Margin="1,0"
-                                                ToolTip="放大"/>
-                                    </StackPanel>
-                                </Border>
                                 <TextBlock Text="暂无原理图"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                            Foreground="#999" FontSize="14">
@@ -233,34 +205,6 @@
                                         </Style>
                                     </wv2:WebView2.Style>
                                 </wv2:WebView2>
-                                <!-- 右下角悬浮按钮 -->
-                                <Border Background="#AAE8E8E8" CornerRadius="3" Padding="2"
-                                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                        Margin="0,0,4,4">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding HasFootprint}" Value="False">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <StackPanel Orientation="Horizontal">
-                                        <Button x:Name="FootprintRecenter" Content="回中"
-                                                Width="28" Height="26" FontSize="10" Padding="2,0"
-                                                Click="FootprintRecenter_Click" Margin="1,0"
-                                                ToolTip="适配窗口"/>
-                                        <Button x:Name="FootprintZoomOut" Content="−"
-                                                Width="26" Height="26" FontSize="14" FontWeight="Bold" Padding="0"
-                                                Click="FootprintZoomOut_Click" Margin="1,0"
-                                                ToolTip="缩小"/>
-                                        <Button x:Name="FootprintZoomIn" Content="+"
-                                                Width="26" Height="26" FontSize="14" FontWeight="Bold" Padding="0"
-                                                Click="FootprintZoomIn_Click" Margin="1,0"
-                                                ToolTip="放大"/>
-                                    </StackPanel>
-                                </Border>
                                 <TextBlock Text="暂无封装"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                            Foreground="#999" FontSize="14">
