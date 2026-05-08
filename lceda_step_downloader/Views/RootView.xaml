@@ -360,9 +360,11 @@
             </Grid>
         </Grid>
 
-        <!-- Growl 通知容器 — 放置于左侧底部避开 WebView2 空气域 -->
-        <StackPanel hc:Growl.GrowlParent="True"
-                    HorizontalAlignment="Left" VerticalAlignment="Bottom"
-                    Margin="10,0,0,10"/>
+        <!-- Growl 通知容器 — 放置于左侧避开 WebView2 空气域 -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                      HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                      MaxHeight="200" Margin="10,0,0,60">
+            <StackPanel hc:Growl.GrowlParent="True"/>
+        </ScrollViewer>
     </Grid>
 </hc:Window>
