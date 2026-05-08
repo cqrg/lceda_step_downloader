@@ -138,6 +138,20 @@ namespace lceda_step_downloader.ViewModels
             set => SetAndNotify(ref _footprintSvgUri, value);
         }
 
+        private Uri _schematicEmbedUri;
+        public Uri SchematicEmbedUri
+        {
+            get => _schematicEmbedUri;
+            set => SetAndNotify(ref _schematicEmbedUri, value);
+        }
+
+        private Uri _footprintEmbedUri;
+        public Uri FootprintEmbedUri
+        {
+            get => _footprintEmbedUri;
+            set => SetAndNotify(ref _footprintEmbedUri, value);
+        }
+
         private bool _hasSchematic;
         public bool HasSchematic
         {
@@ -592,6 +606,14 @@ namespace lceda_step_downloader.ViewModels
                 var productCode = Selecteditem.product_code;
                 Debug.WriteLine($"获取原理图 SVG: {productCode}");
 
+                // 设置 EasyEDA 嵌入式查看器 URI
+                var symbolUuid = Selecteditem.symbol?.uuid;
+                if (!string.IsNullOrEmpty(symbolUuid))
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                        SchematicEmbedUri = new Uri($"https://easyeda.com/embed/{symbolUuid}"));
+                }
+
                 // 使用 EasyEDA 的 SVG API
                 var svgUrl = $"https://easyeda.com/api/products/{productCode}/svgs";
                 Debug.WriteLine($"尝试 URL: {svgUrl}");
@@ -641,6 +663,14 @@ namespace lceda_step_downloader.ViewModels
             {
                 var productCode = Selecteditem.product_code;
                 Debug.WriteLine($"获取封装 SVG: {productCode}");
+
+                // 设置 EasyEDA 嵌入式查看器 URI
+                var footprintUuid = Selecteditem.footprint?.uuid;
+                if (!string.IsNullOrEmpty(footprintUuid))
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                        FootprintEmbedUri = new Uri($"https://easyeda.com/embed/{footprintUuid}"));
+                }
 
                 // 使用 EasyEDA 的 SVG API
                 var svgUrl = $"https://easyeda.com/api/products/{productCode}/svgs";
