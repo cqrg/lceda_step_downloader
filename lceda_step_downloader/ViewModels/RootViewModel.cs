@@ -3,12 +3,14 @@ using lceda_step_downloader.Models.Root;
 using lceda_step_downloader.Models.Component;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Net;
 using System.Windows.Controls;
 using System.Diagnostics;
 using System;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
+using System.IO.Compression;
 using HelixToolkit.Wpf;
 using System.Windows.Media.Media3D;
 using System.Windows.Data;
@@ -17,8 +19,6 @@ using System.IO;
 using System.Windows.Threading;
 using System.Windows;
 using System.Text;
-using System.IO.Compression;
-using System.Net;
 using System.Linq;
 using HandyControl.Controls;
 
@@ -26,6 +26,9 @@ namespace lceda_step_downloader.ViewModels
 {
     public class RootViewModel : PropertyChangedBase
     {
+        private const int DocTypeSymbol = 2;
+        private const int DocTypeFootprint = 4;
+
         private string _title = "立创EDA 3D模型下载器";
         public string Title
         {
@@ -102,54 +105,18 @@ namespace lceda_step_downloader.ViewModels
             }
         }
 
-        private string _schematicSvgPath;
-        public string SchematicSvgPath
+        private string _schematicSvg;
+        public string SchematicSvg
         {
-            get => _schematicSvgPath;
-            set
-            {
-                SetAndNotify(ref _schematicSvgPath, value);
-                SchematicSvgUri = value != null ? new Uri("file:///" + value.Replace("\\", "/")) : null;
-            }
+            get => _schematicSvg;
+            set => SetAndNotify(ref _schematicSvg, value);
         }
 
-        private Uri _schematicSvgUri;
-        public Uri SchematicSvgUri
+        private string _footprintSvg;
+        public string FootprintSvg
         {
-            get => _schematicSvgUri;
-            set => SetAndNotify(ref _schematicSvgUri, value);
-        }
-
-        private string _footprintSvgPath;
-        public string FootprintSvgPath
-        {
-            get => _footprintSvgPath;
-            set
-            {
-                SetAndNotify(ref _footprintSvgPath, value);
-                FootprintSvgUri = value != null ? new Uri("file:///" + value.Replace("\\", "/")) : null;
-            }
-        }
-
-        private Uri _footprintSvgUri;
-        public Uri FootprintSvgUri
-        {
-            get => _footprintSvgUri;
-            set => SetAndNotify(ref _footprintSvgUri, value);
-        }
-
-        private Uri _schematicEmbedUri;
-        public Uri SchematicEmbedUri
-        {
-            get => _schematicEmbedUri;
-            set => SetAndNotify(ref _schematicEmbedUri, value);
-        }
-
-        private Uri _footprintEmbedUri;
-        public Uri FootprintEmbedUri
-        {
-            get => _footprintEmbedUri;
-            set => SetAndNotify(ref _footprintEmbedUri, value);
+            get => _footprintSvg;
+            set => SetAndNotify(ref _footprintSvg, value);
         }
 
         private bool _hasSchematic;
@@ -338,11 +305,11 @@ namespace lceda_step_downloader.ViewModels
 
             //原理图可用性检测
             HasSchematic = Selecteditem.symbol != null && !string.IsNullOrEmpty(Selecteditem.symbol.uuid);
-            SchematicSvgPath = null;
+            SchematicSvg = null;
 
             //封装可用性检测
             HasFootprint = Selecteditem.footprint != null && !string.IsNullOrEmpty(Selecteditem.footprint.uuid);
-            FootprintSvgPath = null;
+            FootprintSvg = null;
 
             //规格书可用性检测
             HasDatasheet = !string.IsNullOrEmpty(Selecteditem.attributes?.Datasheet);
@@ -351,9 +318,8 @@ namespace lceda_step_downloader.ViewModels
             //3D模型可用性检测
             Has3DModel = !string.IsNullOrEmpty(Selecteditem.attributes?._3D_Model);
 
-            //加载原理图和封装预览
-            LoadSchematicPreview();
-            LoadFootprintPreview();
+            //加载原理图和封装SVG
+            LoadSvgPreviews();
 
             //自动加载3D模型
             if (Has3DModel)
@@ -593,120 +559,50 @@ namespace lceda_step_downloader.ViewModels
             });
         }
 
-        public void LoadSchematicPreview()
+        private void LoadSvgPreviews()
         {
-            if (!HasSchematic) return;
-            Task.Run(() => FetchSchematicAsync());
+            if (!HasSchematic && !HasFootprint) return;
+            Task.Run(() => FetchSvgPreviewsAsync());
         }
 
-        private async Task FetchSchematicAsync()
+        private async Task FetchSvgPreviewsAsync()
+        {
+            var productCode = Selecteditem.product_code;
+            var svgs = await FetchSvgsAsync(productCode);
+            if (svgs == null) return;
+
+            if (HasSchematic && svgs.TryGetValue(DocTypeSymbol, out var schematic))
+                Application.Current.Dispatcher.Invoke(() => SchematicSvg = schematic);
+            if (HasFootprint && svgs.TryGetValue(DocTypeFootprint, out var footprint))
+                Application.Current.Dispatcher.Invoke(() => FootprintSvg = footprint);
+        }
+
+        private async Task<Dictionary<int, string>> FetchSvgsAsync(string productCode)
         {
             try
             {
-                var productCode = Selecteditem.product_code;
-                Debug.WriteLine($"获取原理图 SVG: {productCode}");
-
-                // 设置 EasyEDA 嵌入式查看器 URI
-                var symbolUuid = Selecteditem.symbol?.uuid;
-                if (!string.IsNullOrEmpty(symbolUuid))
-                {
-                    Application.Current.Dispatcher.Invoke(() =>
-                        SchematicEmbedUri = new Uri($"https://easyeda.com/embed/{symbolUuid}"));
-                }
-
-                // 使用 EasyEDA 的 SVG API
-                var svgUrl = $"https://easyeda.com/api/products/{productCode}/svgs";
-                Debug.WriteLine($"尝试 URL: {svgUrl}");
+                var svgUrl = $"https://lceda.cn/api/products/{productCode}/svgs";
                 var response = await client.GetAsync(svgUrl);
-                if (response.IsSuccessStatusCode)
+                if (!response.IsSuccessStatusCode) return null;
+
+                var jsonContent = await response.Content.ReadAsStringAsync();
+                var svgResponse = JsonSerializer.Deserialize<JsonElement>(jsonContent);
+                if (!svgResponse.GetProperty("success").GetBoolean()) return null;
+
+                var result = new Dictionary<int, string>();
+                foreach (var item in svgResponse.GetProperty("result").EnumerateArray())
                 {
-                    var jsonContent = await response.Content.ReadAsStringAsync();
-                    Debug.WriteLine($"API 返回长度: {jsonContent.Length}");
-
-                    var svgResponse = JsonSerializer.Deserialize<JsonElement>(jsonContent);
-                    if (svgResponse.GetProperty("success").GetBoolean())
-                    {
-                        var results = svgResponse.GetProperty("result");
-                        if (results.GetArrayLength() > 0)
-                        {
-                            var svgContent = results[0].GetProperty("svg").GetString();
-                            if (!string.IsNullOrEmpty(svgContent))
-                            {
-                                var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"schematic_{productCode}.svg");
-                                await File.WriteAllTextAsync(tempPath, svgContent, Encoding.UTF8);
-                                Application.Current.Dispatcher.Invoke(() => SchematicSvgPath = tempPath);
-                                Debug.WriteLine("原理图 SVG 保存成功");
-                                return;
-                            }
-                        }
-                    }
+                    var docType = item.GetProperty("docType").GetInt32();
+                    var svg = item.GetProperty("svg").GetString();
+                    if (!string.IsNullOrEmpty(svg))
+                        result[docType] = svg;
                 }
-
-                Debug.WriteLine("无法获取原理图数据");
+                return result.Count > 0 ? result : null;
             }
             catch (Exception ex)
             {
-                Debug.WriteLine($"获取原理图失败: {ex.Message}");
-                Debug.WriteLine($"堆栈跟踪: {ex.StackTrace}");
-            }
-        }
-
-        public void LoadFootprintPreview()
-        {
-            if (!HasFootprint) return;
-            Task.Run(() => FetchFootprintAsync());
-        }
-
-        private async Task FetchFootprintAsync()
-        {
-            try
-            {
-                var productCode = Selecteditem.product_code;
-                Debug.WriteLine($"获取封装 SVG: {productCode}");
-
-                // 设置 EasyEDA 嵌入式查看器 URI
-                var footprintUuid = Selecteditem.footprint?.uuid;
-                if (!string.IsNullOrEmpty(footprintUuid))
-                {
-                    Application.Current.Dispatcher.Invoke(() =>
-                        FootprintEmbedUri = new Uri($"https://easyeda.com/embed/{footprintUuid}"));
-                }
-
-                // 使用 EasyEDA 的 SVG API
-                var svgUrl = $"https://easyeda.com/api/products/{productCode}/svgs";
-                Debug.WriteLine($"尝试 URL: {svgUrl}");
-                var response = await client.GetAsync(svgUrl);
-                if (response.IsSuccessStatusCode)
-                {
-                    var jsonContent = await response.Content.ReadAsStringAsync();
-                    Debug.WriteLine($"API 返回长度: {jsonContent.Length}");
-
-                    var svgResponse = JsonSerializer.Deserialize<JsonElement>(jsonContent);
-                    if (svgResponse.GetProperty("success").GetBoolean())
-                    {
-                        var results = svgResponse.GetProperty("result");
-                        if (results.GetArrayLength() > 1)
-                        {
-                            // 最后一个元素是封装
-                            var svgContent = results[results.GetArrayLength() - 1].GetProperty("svg").GetString();
-                            if (!string.IsNullOrEmpty(svgContent))
-                            {
-                                var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"footprint_{productCode}.svg");
-                                await File.WriteAllTextAsync(tempPath, svgContent, Encoding.UTF8);
-                                Application.Current.Dispatcher.Invoke(() => FootprintSvgPath = tempPath);
-                                Debug.WriteLine("封装 SVG 保存成功");
-                                return;
-                            }
-                        }
-                    }
-                }
-
-                Debug.WriteLine("无法获取封装数据");
-            }
-            catch (Exception ex)
-            {
-                Debug.WriteLine($"获取封装失败: {ex.Message}");
-                Debug.WriteLine($"堆栈跟踪: {ex.StackTrace}");
+                Debug.WriteLine($"获取 SVG 失败: {ex.Message}");
+                return null;
             }
         }
 
@@ -731,27 +627,8 @@ namespace lceda_step_downloader.ViewModels
         {
             try
             {
-                var productCode = Selecteditem.product_code;
-                string svgContent = null;
-
-                // 使用 EasyEDA 的 SVG API
-                var svgUrl = $"https://easyeda.com/api/products/{productCode}/svgs";
-                var response = await client.GetAsync(svgUrl);
-                if (response.IsSuccessStatusCode)
-                {
-                    var jsonContent = await response.Content.ReadAsStringAsync();
-                    var svgResponse = JsonSerializer.Deserialize<JsonElement>(jsonContent);
-                    if (svgResponse.GetProperty("success").GetBoolean())
-                    {
-                        var results = svgResponse.GetProperty("result");
-                        if (results.GetArrayLength() > 0)
-                        {
-                            svgContent = results[0].GetProperty("svg").GetString();
-                        }
-                    }
-                }
-
-                if (string.IsNullOrEmpty(svgContent))
+                var svgs = await FetchSvgsAsync(Selecteditem.product_code);
+                if (svgs == null || !svgs.TryGetValue(DocTypeSymbol, out var svgContent))
                 {
                     Application.Current.Dispatcher.Invoke(() =>
                         Growl.Error("无法获取原理图数据"));
@@ -759,7 +636,6 @@ namespace lceda_step_downloader.ViewModels
                 }
 
                 await File.WriteAllTextAsync(filePath, svgContent, Encoding.UTF8);
-
                 Application.Current.Dispatcher.Invoke(() =>
                     ShowDownloadSuccessNotification(Path.GetDirectoryName(filePath)));
             }
@@ -791,28 +667,8 @@ namespace lceda_step_downloader.ViewModels
         {
             try
             {
-                var productCode = Selecteditem.product_code;
-                string svgContent = null;
-
-                // 使用 EasyEDA 的 SVG API
-                var svgUrl = $"https://easyeda.com/api/products/{productCode}/svgs";
-                var response = await client.GetAsync(svgUrl);
-                if (response.IsSuccessStatusCode)
-                {
-                    var jsonContent = await response.Content.ReadAsStringAsync();
-                    var svgResponse = JsonSerializer.Deserialize<JsonElement>(jsonContent);
-                    if (svgResponse.GetProperty("success").GetBoolean())
-                    {
-                        var results = svgResponse.GetProperty("result");
-                        if (results.GetArrayLength() > 1)
-                        {
-                            // 最后一个元素是封装
-                            svgContent = results[results.GetArrayLength() - 1].GetProperty("svg").GetString();
-                        }
-                    }
-                }
-
-                if (string.IsNullOrEmpty(svgContent))
+                var svgs = await FetchSvgsAsync(Selecteditem.product_code);
+                if (svgs == null || !svgs.TryGetValue(DocTypeFootprint, out var svgContent))
                 {
                     Application.Current.Dispatcher.Invoke(() =>
                         Growl.Error("无法获取封装数据"));
@@ -820,7 +676,6 @@ namespace lceda_step_downloader.ViewModels
                 }
 
                 await File.WriteAllTextAsync(filePath, svgContent, Encoding.UTF8);
-
                 Application.Current.Dispatcher.Invoke(() =>
                     ShowDownloadSuccessNotification(Path.GetDirectoryName(filePath)));
             }
@@ -1026,4 +881,5 @@ namespace lceda_step_downloader.ViewModels
             throw new NotImplementedException();
         }
     }
+
 }
