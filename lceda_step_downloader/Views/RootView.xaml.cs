@@ -107,11 +107,22 @@ function updateSVG(){
 }
 updateSVG();
 
+function applyZoom(newZoom, cx, cy){
+  // cx/cy 是缩放原点在 wrap 容器中的坐标, 未传则居中
+  if(cx==null){cx=wrap.clientWidth/2;cy=wrap.clientHeight/2;}
+  var ratio=newZoom/zoom;
+  panX=cx-offsetX-(cx-offsetX-panX)*ratio;
+  panY=cy-offsetY-(cy-offsetY-panY)*ratio;
+  zoom=newZoom;
+  updateSVG();
+}
+
 wrap.addEventListener('wheel',function(e){
   e.preventDefault();
+  var rect=wrap.getBoundingClientRect();
+  var cx=e.clientX-rect.left, cy=e.clientY-rect.top;
   var z=e.deltaY>0?0.9:1.1;
-  zoom=Math.max(0.1,Math.min(20,zoom*z));
-  updateSVG();
+  applyZoom(Math.max(0.1,Math.min(20,zoom*z)), cx, cy);
 },{passive:!1});
 
 wrap.addEventListener('mousedown',function(e){
@@ -133,8 +144,8 @@ window.addEventListener('resize',function(){
 });
 
 window.__svgControl={
-  zoomIn:function(){zoom=Math.min(20,zoom*1.3);updateSVG();},
-  zoomOut:function(){zoom=Math.max(0.1,zoom/1.3);updateSVG();},
+  zoomIn:function(){applyZoom(Math.min(20,zoom*1.3));},
+  zoomOut:function(){applyZoom(Math.max(0.1,zoom/1.3));},
   recenter:function(){zoom=1;panX=0;panY=0;updateSVG();}
 };
 })();
