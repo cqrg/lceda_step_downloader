@@ -498,52 +498,39 @@ namespace lceda_step_downloader.ViewModels
         {
             try
             {
-                var uuid = Selecteditem.symbol.uuid;
-                Debug.WriteLine($"获取原理图 SVG: {uuid}");
-                string svgContent = null;
+                var productCode = Selecteditem.product_code;
+                Debug.WriteLine($"获取原理图 SVG: {productCode}");
 
-                // 尝试从图片服务获取 SVG
-                var svgUrl = $"https://image.lceda.cn/symbol/{uuid}.svg";
+                // 使用 EasyEDA 的 SVG API
+                var svgUrl = $"https://easyeda.com/api/products/{productCode}/svgs";
                 Debug.WriteLine($"尝试 URL: {svgUrl}");
                 var response = await client.GetAsync(svgUrl);
                 if (response.IsSuccessStatusCode)
                 {
-                    svgContent = await response.Content.ReadAsStringAsync();
-                    Debug.WriteLine($"SVG 内容长度: {svgContent.Length}");
-                    if (string.IsNullOrEmpty(svgContent) || !svgContent.Contains("<svg"))
+                    var jsonContent = await response.Content.ReadAsStringAsync();
+                    Debug.WriteLine($"API 返回长度: {jsonContent.Length}");
+
+                    var svgResponse = JsonSerializer.Deserialize<JsonElement>(jsonContent);
+                    if (svgResponse.GetProperty("success").GetBoolean())
                     {
-                        svgContent = null;
+                        var results = svgResponse.GetProperty("result");
+                        if (results.GetArrayLength() > 0)
+                        {
+                            var svgContent = results[0].GetProperty("svg").GetString();
+                            if (!string.IsNullOrEmpty(svgContent))
+                            {
+                                var htmlContent = CreateSvgHtmlWrapper(svgContent);
+                                var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"schematic_{productCode}.html");
+                                await File.WriteAllTextAsync(tempPath, htmlContent, Encoding.UTF8);
+                                Application.Current.Dispatcher.Invoke(() => SchematicSvgPath = tempPath);
+                                Debug.WriteLine("原理图 HTML 保存成功");
+                                return;
+                            }
+                        }
                     }
                 }
 
-                // 备选方案：从组件 API 获取
-                if (svgContent == null)
-                {
-                    Debug.WriteLine("尝试从组件 API 获取...");
-                    var streamTask = client.GetStreamAsync(
-                        $"https://pro.lceda.cn/api/components/{uuid}?uuid={uuid}");
-                    var component = await JsonSerializer.DeserializeAsync<Component>(await streamTask);
-
-                    if (component?.result?.dataStr != null)
-                    {
-                        svgContent = component.result.dataStr;
-                        Debug.WriteLine($"组件 API 返回 dataStr 长度: {svgContent.Length}");
-                    }
-                }
-
-                if (!string.IsNullOrEmpty(svgContent))
-                {
-                    // 创建 HTML 包装器以确保 SVG 正确显示
-                    var htmlContent = CreateSvgHtmlWrapper(svgContent);
-                    var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"schematic_{uuid}.html");
-                    await File.WriteAllTextAsync(tempPath, htmlContent, Encoding.UTF8);
-                    Application.Current.Dispatcher.Invoke(() => SchematicSvgPath = tempPath);
-                    Debug.WriteLine("原理图 HTML 保存成功");
-                }
-                else
-                {
-                    Debug.WriteLine("无法获取原理图数据");
-                }
+                Debug.WriteLine("无法获取原理图数据");
             }
             catch (Exception ex)
             {
@@ -562,56 +549,40 @@ namespace lceda_step_downloader.ViewModels
         {
             try
             {
-                var uuid = Selecteditem.footprint.uuid;
-                Debug.WriteLine($"获取封装 SVG: {uuid}");
-                string svgContent = null;
+                var productCode = Selecteditem.product_code;
+                Debug.WriteLine($"获取封装 SVG: {productCode}");
 
-                // 尝试从图片服务获取 SVG
-                var svgUrl = $"https://image.lceda.cn/package/{uuid}.svg";
+                // 使用 EasyEDA 的 SVG API
+                var svgUrl = $"https://easyeda.com/api/products/{productCode}/svgs";
                 Debug.WriteLine($"尝试 URL: {svgUrl}");
                 var response = await client.GetAsync(svgUrl);
                 if (response.IsSuccessStatusCode)
                 {
-                    svgContent = await response.Content.ReadAsStringAsync();
-                    Debug.WriteLine($"SVG 内容长度: {svgContent.Length}");
-                    if (string.IsNullOrEmpty(svgContent) || !svgContent.Contains("<svg"))
-                    {
-                        Debug.WriteLine($"返回内容不是有效 SVG");
-                        svgContent = null;
-                    }
-                }
-                else
-                {
-                    Debug.WriteLine($"图片服务返回状态码: {response.StatusCode}");
-                }
+                    var jsonContent = await response.Content.ReadAsStringAsync();
+                    Debug.WriteLine($"API 返回长度: {jsonContent.Length}");
 
-                // 备选方案：从组件 API 获取
-                if (svgContent == null)
-                {
-                    Debug.WriteLine("尝试从组件 API 获取...");
-                    var streamTask = client.GetStreamAsync(
-                        $"https://pro.lceda.cn/api/components/{uuid}?uuid={uuid}");
-                    var component = await JsonSerializer.DeserializeAsync<Component>(await streamTask);
-                    if (component?.result?.dataStr != null)
+                    var svgResponse = JsonSerializer.Deserialize<JsonElement>(jsonContent);
+                    if (svgResponse.GetProperty("success").GetBoolean())
                     {
-                        svgContent = component.result.dataStr;
-                        Debug.WriteLine($"组件 API 返回 dataStr 长度: {svgContent.Length}");
+                        var results = svgResponse.GetProperty("result");
+                        if (results.GetArrayLength() > 1)
+                        {
+                            // 最后一个元素是封装
+                            var svgContent = results[results.GetArrayLength() - 1].GetProperty("svg").GetString();
+                            if (!string.IsNullOrEmpty(svgContent))
+                            {
+                                var htmlContent = CreateSvgHtmlWrapper(svgContent);
+                                var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"footprint_{productCode}.html");
+                                await File.WriteAllTextAsync(tempPath, htmlContent, Encoding.UTF8);
+                                Application.Current.Dispatcher.Invoke(() => FootprintSvgPath = tempPath);
+                                Debug.WriteLine("封装 HTML 保存成功");
+                                return;
+                            }
+                        }
                     }
                 }
 
-                if (!string.IsNullOrEmpty(svgContent))
-                {
-                    // 创建 HTML 包装器以确保 SVG 正确显示
-                    var htmlContent = CreateSvgHtmlWrapper(svgContent);
-                    var tempPath = Path.Combine(AppContext.BaseDirectory, "temp", $"footprint_{uuid}.html");
-                    await File.WriteAllTextAsync(tempPath, htmlContent, Encoding.UTF8);
-                    Application.Current.Dispatcher.Invoke(() => FootprintSvgPath = tempPath);
-                    Debug.WriteLine("封装 HTML 保存成功");
-                }
-                else
-                {
-                    Debug.WriteLine("无法获取封装数据");
-                }
+                Debug.WriteLine("无法获取封装数据");
             }
             catch (Exception ex)
             {
@@ -641,27 +612,24 @@ namespace lceda_step_downloader.ViewModels
         {
             try
             {
-                var uuid = Selecteditem.symbol.uuid;
+                var productCode = Selecteditem.product_code;
                 string svgContent = null;
 
-                // 直接从 API 获取 SVG 内容
-                var svgUrl = $"https://image.lceda.cn/symbol/{uuid}.svg";
+                // 使用 EasyEDA 的 SVG API
+                var svgUrl = $"https://easyeda.com/api/products/{productCode}/svgs";
                 var response = await client.GetAsync(svgUrl);
                 if (response.IsSuccessStatusCode)
                 {
-                    svgContent = await response.Content.ReadAsStringAsync();
-                    if (string.IsNullOrEmpty(svgContent) || !svgContent.Contains("<svg"))
+                    var jsonContent = await response.Content.ReadAsStringAsync();
+                    var svgResponse = JsonSerializer.Deserialize<JsonElement>(jsonContent);
+                    if (svgResponse.GetProperty("success").GetBoolean())
                     {
-                        svgContent = null;
+                        var results = svgResponse.GetProperty("result");
+                        if (results.GetArrayLength() > 0)
+                        {
+                            svgContent = results[0].GetProperty("svg").GetString();
+                        }
                     }
-                }
-
-                if (svgContent == null)
-                {
-                    var streamTask = client.GetStreamAsync(
-                        $"https://pro.lceda.cn/api/components/{uuid}?uuid={uuid}");
-                    var component = await JsonSerializer.DeserializeAsync<Component>(await streamTask);
-                    svgContent = component?.result?.dataStr;
                 }
 
                 if (string.IsNullOrEmpty(svgContent))
@@ -704,27 +672,25 @@ namespace lceda_step_downloader.ViewModels
         {
             try
             {
-                var uuid = Selecteditem.footprint.uuid;
+                var productCode = Selecteditem.product_code;
                 string svgContent = null;
 
-                // 直接从图片服务获取 SVG
-                var svgUrl = $"https://image.lceda.cn/package/{uuid}.svg";
+                // 使用 EasyEDA 的 SVG API
+                var svgUrl = $"https://easyeda.com/api/products/{productCode}/svgs";
                 var response = await client.GetAsync(svgUrl);
                 if (response.IsSuccessStatusCode)
                 {
-                    svgContent = await response.Content.ReadAsStringAsync();
-                    if (string.IsNullOrEmpty(svgContent) || !svgContent.Contains("<svg"))
+                    var jsonContent = await response.Content.ReadAsStringAsync();
+                    var svgResponse = JsonSerializer.Deserialize<JsonElement>(jsonContent);
+                    if (svgResponse.GetProperty("success").GetBoolean())
                     {
-                        svgContent = null;
+                        var results = svgResponse.GetProperty("result");
+                        if (results.GetArrayLength() > 1)
+                        {
+                            // 最后一个元素是封装
+                            svgContent = results[results.GetArrayLength() - 1].GetProperty("svg").GetString();
+                        }
                     }
-                }
-
-                if (svgContent == null)
-                {
-                    var streamTask = client.GetStreamAsync(
-                        $"https://pro.lceda.cn/api/components/{uuid}?uuid={uuid}");
-                    var component = await JsonSerializer.DeserializeAsync<Component>(await streamTask);
-                    svgContent = component?.result?.dataStr;
                 }
 
                 if (string.IsNullOrEmpty(svgContent))
