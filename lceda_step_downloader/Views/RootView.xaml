@@ -60,9 +60,9 @@
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem" BasedOn="{StaticResource ListViewItemBaseStyle}">
                                 <Setter Property="MinHeight" Value="20"/>
+                                <Setter Property="ToolTip" Value="{Binding PriceInfo, TargetNullValue='价格加载中...'}"/>
                                 <Setter Property="ToolTipService.ShowDuration" Value="30000"/>
                                 <Setter Property="FontSize" Value="12"/>
-                                <EventSetter Event="MouseEnter" Handler="ListViewItem_MouseEnter"/>
                             </Style>
                         </ListView.ItemContainerStyle>
                         <ListView.View>

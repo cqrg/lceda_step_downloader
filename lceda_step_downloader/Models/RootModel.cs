@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -146,8 +148,15 @@ namespace lceda_step_downloader.Models.Root
         public string display_title { get; set; }
     }
 
-    public class ResultItem
+    public class ResultItem : INotifyPropertyChanged
     {
+        public event PropertyChangedEventHandler PropertyChanged;
+        private void SetAndNotify<T>(ref T field, T value, [CallerMemberName] string name = null)
+        {
+            if (Equals(field, value)) return;
+            field = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        }
 
         public string uuid { get; set; }
 
@@ -195,8 +204,9 @@ namespace lceda_step_downloader.Models.Root
 
         public Footprint footprint { get; set; }
 
+        private string _priceInfo;
         [JsonIgnore]
-        public string PriceInfo { get; set; }
+        public string PriceInfo { get => _priceInfo; set => SetAndNotify(ref _priceInfo, value); }
     }
 
     public class Root

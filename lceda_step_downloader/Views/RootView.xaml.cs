@@ -176,20 +176,5 @@ window.__svgControl={
             }
         }
 
-        private void ListViewItem_MouseEnter(object sender, MouseEventArgs e)
-        {
-            if (sender is ListViewItem item && item.DataContext is ResultItem resultItem)
-            {
-                if (!string.IsNullOrEmpty(resultItem.PriceInfo))
-                {
-                    item.ToolTip = resultItem.PriceInfo;
-                }
-                else
-                {
-                    item.ToolTip = "价格加载中...";
-                }
-            }
-        }
-
     }
 }

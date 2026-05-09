@@ -9,6 +9,7 @@ using System.Diagnostics;
 using System;
 using System.Net.Http;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.IO.Compression;
 using HelixToolkit.Wpf;
@@ -199,8 +200,10 @@ namespace lceda_step_downloader.ViewModels
         {
             if (SearchResult?.result == null) return;
 
-            foreach (var item in SearchResult.result)
+            var semaphore = new SemaphoreSlim(3);
+            var tasks = SearchResult.result.Select(async item =>
             {
+                await semaphore.WaitAsync();
                 try
                 {
                     var payload = new
@@ -216,39 +219,41 @@ namespace lceda_step_downloader.ViewModels
                     var response = await client.PostAsync(
                         "https://jlcpcb.com/api/overseas-pcb-order/v1/shoppingCart/smtGood/selectSmtComponentList",
                         content);
-                    if (response.IsSuccessStatusCode)
+                    if (!response.IsSuccessStatusCode) return;
+
+                    var jsonContent = await response.Content.ReadAsStringAsync();
+                    var result = JsonSerializer.Deserialize<JsonElement>(jsonContent);
+                    if (result.GetProperty("code").GetInt32() != 200) return;
+
+                    var list = result.GetProperty("data").GetProperty("componentPageInfo").GetProperty("list");
+                    if (list.GetArrayLength() == 0) return;
+
+                    var prices = list[0].GetProperty("componentPrices");
+                    if (prices.GetArrayLength() == 0) return;
+
+                    var priceBuilder = new StringBuilder();
+                    priceBuilder.AppendLine("价格梯度：");
+                    foreach (var price in prices.EnumerateArray())
                     {
-                        var jsonContent = await response.Content.ReadAsStringAsync();
-                        var result = JsonSerializer.Deserialize<JsonElement>(jsonContent);
-                        if (result.GetProperty("code").GetInt32() == 200)
-                        {
-                            var list = result.GetProperty("data").GetProperty("componentPageInfo").GetProperty("list");
-                            if (list.GetArrayLength() > 0)
-                            {
-                                var prices = list[0].GetProperty("componentPrices");
-                                if (prices.GetArrayLength() > 0)
-                                {
-                                    var priceBuilder = new StringBuilder();
-                                    priceBuilder.AppendLine("价格梯度：");
-                                    foreach (var price in prices.EnumerateArray())
-                                    {
-                                        var start = price.GetProperty("startNumber").GetInt32();
-                                        var end = price.GetProperty("endNumber").GetInt32();
-                                        var unitPrice = price.GetProperty("productPrice").GetDouble();
-                                        var endStr = end == -1 ? "更多" : end.ToString();
-                                        priceBuilder.AppendLine($"{start}-{endStr}: ¥{unitPrice:F4}");
-                                    }
-                                    item.PriceInfo = priceBuilder.ToString().TrimEnd();
-                                }
-                            }
-                        }
+                        var start = price.GetProperty("startNumber").GetInt32();
+                        var end = price.GetProperty("endNumber").GetInt32();
+                        var unitPrice = price.GetProperty("productPrice").GetDouble();
+                        var endStr = end == -1 ? "更多" : end.ToString();
+                        priceBuilder.AppendLine($"{start}-{endStr}: ¥{unitPrice:F4}");
                     }
+                    item.PriceInfo = priceBuilder.ToString().TrimEnd();
                 }
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"获取价格失败 {item.product_code}: {ex.Message}");
                 }
-            }
+                finally
+                {
+                    semaphore.Release();
+                }
+            });
+
+            await Task.WhenAll(tasks);
         }
 
         public void OnResultSelection()
@@ -366,7 +371,8 @@ namespace lceda_step_downloader.ViewModels
             if (File.Exists(@".\step\" + Selecteditem.footprint.display_title.ToString().Replace("/", "") + @".step"))
             {
                 Debug.WriteLine("存在step缓存");
-                ShowFileExistsNotification(Path.Combine(AppContext.BaseDirectory, "step"), "STEP文件已存在");
+                var stepFileName = string.Join("_", Selecteditem.footprint.display_title.Split(Path.GetInvalidFileNameChars())) + ".step";
+                ShowFileExistsNotification(Path.Combine(AppContext.BaseDirectory, "step", stepFileName));
                 return;
             }
             DownloadAllowed = false;
@@ -477,7 +483,7 @@ namespace lceda_step_downloader.ViewModels
             DownloadAllowed = true;
 
             Application.Current.Dispatcher.Invoke(() =>
-                ShowDownloadSuccessNotification(Path.Combine(AppContext.BaseDirectory, "step")));
+                ShowDownloadSuccessNotification(fileToWriteTo));
         }
 
         public static HttpContent CompressRequestContent(string content)
@@ -611,7 +617,7 @@ namespace lceda_step_downloader.ViewModels
 
             if (File.Exists(filePath))
             {
-                ShowFileExistsNotification(Path.GetDirectoryName(filePath), "引脚列表文件已存在");
+                ShowFileExistsNotification(filePath);
                 return;
             }
 
@@ -691,7 +697,7 @@ namespace lceda_step_downloader.ViewModels
 
                 await File.WriteAllTextAsync(filePath, csv.ToString(), Encoding.UTF8);
                 Application.Current.Dispatcher.Invoke(() =>
-                    ShowDownloadSuccessNotification(Path.GetDirectoryName(filePath)));
+                    ShowDownloadSuccessNotification(filePath));
                 }
             }
             catch (Exception ex)
@@ -764,7 +770,7 @@ namespace lceda_step_downloader.ViewModels
 
             if (File.Exists(filePath))
             {
-                ShowFileExistsNotification(Path.GetDirectoryName(filePath), "封装文件已存在");
+                ShowFileExistsNotification(filePath);
                 return;
             }
 
@@ -785,7 +791,7 @@ namespace lceda_step_downloader.ViewModels
 
                 await File.WriteAllTextAsync(filePath, svgContent, Encoding.UTF8);
                 Application.Current.Dispatcher.Invoke(() =>
-                    ShowDownloadSuccessNotification(Path.GetDirectoryName(filePath)));
+                    ShowDownloadSuccessNotification(filePath));
             }
             catch (Exception ex)
             {
@@ -830,7 +836,7 @@ namespace lceda_step_downloader.ViewModels
                 return;
             }
 
-            var url = $"https://item.szlcsc.com/search?q={Uri.EscapeDataString(code)}";
+            var url = $"https://item.szlcsc.com/{Uri.EscapeDataString(code.TrimStart('C'))}.html";
             try
             {
                 Process.Start(new ProcessStartInfo
@@ -893,7 +899,7 @@ namespace lceda_step_downloader.ViewModels
 
             if (File.Exists(filePath))
             {
-                ShowFileExistsNotification(Path.GetDirectoryName(filePath), "规格书文件已存在");
+                ShowFileExistsNotification(filePath);
                 return;
             }
 
@@ -917,7 +923,7 @@ namespace lceda_step_downloader.ViewModels
                 await stream.CopyToAsync(fileStream);
 
                 Application.Current.Dispatcher.Invoke(() =>
-                    ShowDownloadSuccessNotification(Path.GetDirectoryName(filePath)));
+                    ShowDownloadSuccessNotification(filePath));
             }
             catch (Exception ex)
             {
@@ -926,14 +932,15 @@ namespace lceda_step_downloader.ViewModels
             }
         }
 
-        private void ShowFileExistsNotification(string directoryPath, string message)
+        private void ShowFileExistsNotification(string filePath)
         {
+            var fileName = Path.GetFileName(filePath);
             Application.Current.Dispatcher.Invoke(() =>
             {
                 Growl.Ask(new HandyControl.Data.GrowlInfo
                 {
-                    Message = message,
-                    ConfirmStr = "打开文件夹",
+                    Message = $"{fileName}\n文件已存在",
+                    ConfirmStr = "打开位置",
                     CancelStr = "关闭",
                     IsCustom = true,
                     IconKey = "SuccessGeometry",
@@ -941,21 +948,22 @@ namespace lceda_step_downloader.ViewModels
                     ActionBeforeClose = isConfirmed =>
                     {
                         if (isConfirmed)
-                            OpenDirectory(directoryPath);
+                            OpenFileLocation(filePath);
                         return true;
                     }
                 });
             });
         }
 
-        private void ShowDownloadSuccessNotification(string directoryPath)
+        private void ShowDownloadSuccessNotification(string filePath)
         {
+            var fileName = Path.GetFileName(filePath);
             Application.Current.Dispatcher.Invoke(() =>
             {
                 Growl.Ask(new HandyControl.Data.GrowlInfo
                 {
-                    Message = "下载成功！是否打开文件夹？",
-                    ConfirmStr = "打开文件夹",
+                    Message = $"{fileName}\n下载成功",
+                    ConfirmStr = "打开位置",
                     CancelStr = "关闭",
                     IsCustom = true,
                     IconKey = "SuccessGeometry",
@@ -963,14 +971,31 @@ namespace lceda_step_downloader.ViewModels
                     ActionBeforeClose = isConfirmed =>
                     {
                         if (isConfirmed)
-                            OpenDirectory(directoryPath);
+                            OpenFileLocation(filePath);
                         return true;
                     }
                 });
             });
         }
 
-        private void OpenDirectory(string path)
+        private static void OpenFileLocation(string filePath)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "explorer",
+                    Arguments = $"/select,\"{filePath}\"",
+                    UseShellExecute = false
+                });
+            }
+            catch (Exception ex)
+            {
+                Growl.Error("无法打开文件夹: " + ex.Message);
+            }
+        }
+
+        private static void OpenDirectory(string path)
         {
             try
             {
